@@ -121,28 +121,65 @@ with st.expander("Ligand details", expanded=True):
         })
     st.dataframe(pd.DataFrame(lig_rows), use_container_width=True, hide_index=True)
 
-# 3D view
-st.subheader("3D Structure")
-render_3d_view(Complex(parsed))
+with st.expander("3D Structure", expanded=True):
+    render_3d_view(Complex(parsed))
 
-# Run predictor
-result    = predict_spectrum(parsed, spectrum_type=spectrum_type, apply_corrections=True)
-all_bands = result.bands
+st.divider()
 
-for w in result.warnings:
-    st.warning(w)
+# Run predictor(s)
+want_ir    = spectrum_type in ("IR", "Both")
+want_raman = spectrum_type in ("Raman", "Both")
 
-# Spectrum
-st.subheader(f"Predicted {spectrum_type} Spectrum")
-if all_bands:
-    st.plotly_chart(
-        plot_spectrum(result.bands, result.intensities, f"{spectrum_type} — {user_input}", sigma),
-        use_container_width=True
-    )
-    st.subheader("Band Assignments")
-    st.dataframe(bands_to_df(result), use_container_width=True, hide_index=True)
+ir_result    = predict_spectrum(parsed, spectrum_type="IR",    apply_corrections=True) if want_ir    else None
+raman_result = predict_spectrum(parsed, spectrum_type="Raman", apply_corrections=True) if want_raman else None
+
+for r in (ir_result, raman_result):
+    if r is not None:
+        for w in r.warnings:
+            st.warning(w)
+
+
+def _plot_block(result, label):
+    if result.bands:
+        st.plotly_chart(
+            plot_spectrum(result.bands, result.intensities, f"{label} — {user_input}", sigma),
+            use_container_width=True,
+        )
+    else:
+        st.info(f"No {label} data available for this complex.")
+
+
+# Spectrum plots
+st.subheader("Predicted Spectra")
+if spectrum_type == "Both":
+    col_ir, col_ra = st.columns(2)
+    with col_ir:
+        _plot_block(ir_result, "IR")
+    with col_ra:
+        _plot_block(raman_result, "Raman")
 else:
-    st.info(f"No {spectrum_type} data available for the ligands in this complex.")
+    _plot_block(ir_result if want_ir else raman_result, spectrum_type)
+
+# Band assignments
+st.subheader("Band Assignments")
+if spectrum_type == "Both":
+    tab_ir, tab_ra = st.tabs(["IR Bands", "Raman Bands"])
+    with tab_ir:
+        if ir_result and ir_result.bands:
+            st.dataframe(bands_to_df(ir_result), use_container_width=True, hide_index=True)
+        else:
+            st.info("No IR band data available.")
+    with tab_ra:
+        if raman_result and raman_result.bands:
+            st.dataframe(bands_to_df(raman_result), use_container_width=True, hide_index=True)
+        else:
+            st.info("No Raman band data available.")
+else:
+    active = ir_result if want_ir else raman_result
+    if active and active.bands:
+        st.dataframe(bands_to_df(active), use_container_width=True, hide_index=True)
+    else:
+        st.info(f"No {spectrum_type} band data available.")
 
 st.divider()
 st.caption("Data: Nakamoto, K. *Infrared and Raman Spectra of Inorganic and Coordination Compounds*, 6th ed., Wiley, 2009.")
