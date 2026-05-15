@@ -14,6 +14,7 @@ from coordchem.geometry import geometry_report
 from coordchem.complex import Complex
 from coordchem.spectra.predictor import predict_spectrum
 from coordchem.spectra.renderer import plot_spectrum, build_spectrum
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 def bands_to_df(result):
@@ -29,6 +30,7 @@ def bands_to_df(result):
             "Assignment":     b.assignment,
         })
     return pd.DataFrame(rows)
+
 def render_2d_view(complex_obj: Complex, size: int = 520):
     """Render a 2D SVG depiction of ``complex_obj`` inside the current Streamlit page."""
     import streamlit.components.v1 as components
