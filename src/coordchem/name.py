@@ -192,6 +192,6 @@ def parse_name(name: str) -> ParsedComplex:
 
 
 def _normalize_name(name: str) -> str:
-     """Normalize a coordination compound name for simple substring matching."""
+    """Normalize a coordination compound name for simple substring matching."""
     return re.sub(r"[\s_\-()]+", "", name).lower()
 
