@@ -172,17 +172,17 @@ def build_formula(metal: str, ligands: dict, oxidation_state: int,
     return f"[{inner}]{charge_str}"
 
 def parse_name(name: str) -> ParsedComplex:
-     raw_name= name
-     metal= metal_data(name)
-     oxydation_state= extract_complex_charge_from_name(name)
-     ligands= ligand_data(name)
+    raw_name= name
+    metal= metal_data(name)
+    oxydation_state= extract_complex_charge_from_name(name)
+    ligands= ligand_data(name)
 
     _enrich(result)
 
-     if oxydation_state is not None:
-          result.oxidation_state=oxydation_state
-          result.complex_charge=oxydation_state + result.total_ligand_charge
-          _apply_ambidentate_donor_assignments(result)
+    if oxydation_state is not None:
+        result.oxidation_state=oxydation_state
+        result.complex_charge=oxydation_state + result.total_ligand_charge
+        _apply_ambidentate_donor_assignments(result)
     return result
 
 
@@ -192,8 +192,8 @@ def _normalize_name(name: str) -> str:
 
 #test
 if __name__=="__main__":
-     name = input ("complex name is:")
-     complex_info=parse_name(name)
-     print(complex_info)
+    name = input ("complex name is:")
+    complex_info=parse_name(name)
+    print(complex_info)
 
 
