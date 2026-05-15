@@ -13,7 +13,7 @@ from coordchem.parser import parse_formula, FormulaParseError
 from coordchem.geometry import geometry_report
 from coordchem.complex import Complex
 from coordchem.spectra.predictor import predict_spectrum
-from coordchem.spectra.renderer import plot_spectrum, build_spectrum
+from coordchem.spectra.renderer import plot_spectrum 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
