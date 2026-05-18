@@ -213,6 +213,7 @@ with st.sidebar:
 
     st.divider()
 
+    invert        = st.checkbox("Transmittance style (downward peaks)", value=False)
     spectrum_type = st.radio("Spectrum type", ["IR", "Raman", "Both"], index=2, horizontal=True)
     sigma         = st.slider("Peak width σ (cm⁻¹)", min_value=5, max_value=60, value=20, step=5)
 
@@ -340,12 +341,11 @@ for r in (ir_result, raman_result):
 def _plot_block(result, label):
     if result.bands:
         st.plotly_chart(
-            plot_spectrum(result.bands, result.intensities, f"{label} — {user_input}", sigma),
+            plot_spectrum(result.bands, result.intensities, f"{label} — {user_input}", sigma,  invert=invert),
             use_container_width=True,
         )
     else:
         st.info(f"No {label} data available for this complex.")
-
 
 # Spectrum plots
 st.subheader("Predicted Spectra")

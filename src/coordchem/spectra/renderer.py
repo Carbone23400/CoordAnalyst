@@ -22,15 +22,28 @@ def build_spectrum(bands, intensities, sigma=20.0, wn_range=(100, 4000)):
         y /= y.max()
     return x, y
 
-def plot_spectrum(bands, intensities, title, sigma):
+def plot_spectrum(bands, intensities, title, sigma, invert=False):
     x, y = build_spectrum(bands, intensities, sigma=sigma)
-    fig  = go.Figure()
+
+    if invert:
+        y         = 1 - y
+        y_range   = [-0.08, 1.0]
+        y_label   = "Transmittance"
+        fill      = "tooney"   # fill to top
+        fillcolor = "rgba(37,99,235,0.08)"
+    else:
+        y_range   = [0, 1.08]
+        y_label   = "Absorbance (a.u.)"
+        fill      = "tozeroy"
+        fillcolor = "rgba(37,99,235,0.08)"
+
+    fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=x, y=y,
         mode="lines",
-        fill="tozeroy",
+        fill=fill,
         line=dict(color="#2563eb", width=2),
-        fillcolor="rgba(37,99,235,0.08)",
+        fillcolor=fillcolor,
     ))
     for band in bands:
         fig.add_vline(
@@ -40,9 +53,9 @@ def plot_spectrum(bands, intensities, title, sigma):
     fig.update_layout(
         title=title,
         xaxis_title="Wavenumber (cm⁻¹)",
-        yaxis_title="Relative Intensity",
+        yaxis_title=y_label,
         xaxis=dict(autorange="reversed", showgrid=True, gridcolor="#f1f5f9"),
-        yaxis=dict(range=[0, 1.08], showgrid=True, gridcolor="#f1f5f9"),
+        yaxis=dict(range=y_range, showgrid=True, gridcolor="#f1f5f9"),
         plot_bgcolor="white",
         height=380,
         margin=dict(l=50, r=20, t=50, b=45),
