@@ -1,35 +1,3 @@
-.. These are examples of badges you might want to add to your README:
-   please update the URLs accordingly
-
-    .. image:: https://api.cirrus-ci.com/github/<USER>/Cheminfo.svg?branch=main
-        :alt: Built Status
-        :target: https://cirrus-ci.com/github/<USER>/Cheminfo
-    .. image:: https://readthedocs.org/projects/Cheminfo/badge/?version=latest
-        :alt: ReadTheDocs
-        :target: https://Cheminfo.readthedocs.io/en/stable/
-    .. image:: https://img.shields.io/coveralls/github/<USER>/Cheminfo/main.svg
-        :alt: Coveralls
-        :target: https://coveralls.io/r/<USER>/Cheminfo
-    .. image:: https://img.shields.io/pypi/v/Cheminfo.svg
-        :alt: PyPI-Server
-        :target: https://pypi.org/project/Cheminfo/
-    .. image:: https://img.shields.io/conda/vn/conda-forge/Cheminfo.svg
-        :alt: Conda-Forge
-        :target: https://anaconda.org/conda-forge/Cheminfo
-    .. image:: https://pepy.tech/badge/Cheminfo/month
-        :alt: Monthly Downloads
-        :target: https://pepy.tech/project/Cheminfo
-    .. image:: https://img.shields.io/twitter/url/http/shields.io.svg?style=social&label=Twitter
-        :alt: Twitter
-        :target: https://twitter.com/Cheminfo
-
-.. image:: https://img.shields.io/badge/-PyScaffold-005CA0?logo=pyscaffold
-    :alt: Project generated with PyScaffold
-    :target: https://pyscaffold.org/
-
-|
-
-========
 CoordAnalyst
 ========
 
@@ -41,7 +9,7 @@ The package CoordAnalyst aimes to analyse a wide range of coordination complexes
 Thus, a user can enter the name or the formula of the complex on the interface to obtain its name and formula, the metal and its oxydation state, the geometry, the number of d electron and the coordination state. The list of the major common ligands that are supported is displayed, to help prevent any unknown input from the user. Furthermore, the 2D and 3D structure are displayed. For the complexes for which two different geometry can be found, both can be selected.  However, the complexes representations are qualitative and not quantitative. The goal is not to rely on the accuracy of the angles or bond length but to visualize the molecule in a global way. In addition, the package can provide Raman spectra, IR spectra or both depending on the user's preference. The width of the peaks can be selected and the transmittance style chosen. The precision of the peaks is also indicated. Finally, the data source is quoted at the bottom of the page.    
 Thus, our package is a coordination complex spectra predictor that can be used as an educational tool to obtain the main properties of the complex, its IR and Raman spectra and display the complex by the 2D and 3D representations. It has value in being a lightweight tool, but its accuracy can not be expected to meet those of the result of quantum computations. 
 
-
+    
 
 ## Installation
 
