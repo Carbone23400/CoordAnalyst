@@ -35,9 +35,8 @@ from data.ir_ra_bands import IRBandDB, BandRecord
 from coordchem.parser import ParsedComplex
 from coordchem.geometry import geometry_report
 
-# ---------------------------------------------------------------------------
+
 # Intensity mapping
-# ---------------------------------------------------------------------------
 
 INTENSITY_SCALE: dict[str, float] = {
     "very strong":  1.00,
@@ -48,9 +47,8 @@ INTENSITY_SCALE: dict[str, float] = {
 }
 
 
-# ---------------------------------------------------------------------------
+
 # Correction data tables
-# ---------------------------------------------------------------------------
 
 # Backbonding shifts for π-accepting ligands (CN, CO, NO)
 # Values in cm⁻¹ relative to the generic database center value.
@@ -58,7 +56,6 @@ INTENSITY_SCALE: dict[str, float] = {
 
 BACKBONDING_SHIFTS: dict[tuple, float] = {
     # (ligand, metal, oxidation_state) → shift in cm⁻¹
-    # CN backbonding shifts
     ("CN", "Fe", 2): +10,
     ("CN", "Fe", 3): +35,
     ("CN", "Co", 2): +15,
@@ -75,7 +72,6 @@ BACKBONDING_SHIFTS: dict[tuple, float] = {
     ("CN", "W",  0): -30,
     ("CN", "Ru", 2): +5,
     ("CN", "Os", 2): +5,
-    # CO backbonding shifts — more sensitive than CN
     ("CO", "Cr", 0): -30,
     ("CO", "Mo", 0): -25,
     ("CO", "W",  0): -20,
@@ -91,11 +87,10 @@ BACKBONDING_SHIFTS: dict[tuple, float] = {
     ("NO", "Cr", 0): -30,
 }
 
-# Coordination shifts — how much a band moves when a free ligand coordinates.
+# Coordination shifts 
 # Source: Nakamoto Vol.2 Chapter 2
 
 COORDINATION_SHIFTS: dict[tuple, float] = {
-    # (ligand, assignment_keyword) → shift in cm⁻¹
     ("NH3", "N–H stretch"):          -150,
     ("NH3", "NH₃ sym. deformation"):  +50,
     ("NH3", "NH₃ rock"):              +80,
@@ -107,14 +102,13 @@ COORDINATION_SHIFTS: dict[tuple, float] = {
     ("dmso","S=O stretch"):          -100,
 }
 
-# Selection rules — which M-L band types are IR/Raman active per geometry.
+# Selection rules : which M-L band types are IR/Raman active per geometry.
 # Based on the mutual exclusion rule:
 # In centrosymmetric complexes (Oh, D4h), a band cannot be
 # both IR and Raman active.
 # Source: Nakamoto Vol.1 Chapter 1
 
 SELECTION_RULES: dict[tuple, bool] = {
-    # (geometry, assignment_keyword, spectrum_type) → is_active
     # Octahedral (Oh) — centrosymmetric
     ("octahedral", "M–C stretch",   "IR"):    False,
     ("octahedral", "M–C stretch",   "Raman"): True,
@@ -126,7 +120,7 @@ SELECTION_RULES: dict[tuple, bool] = {
     ("octahedral", "M–Cl stretch",  "Raman"): True,
     ("octahedral", "M–Br stretch",  "IR"):    False,
     ("octahedral", "M–Br stretch",  "Raman"): True,
-    # Square planar (D4h) — also centrosymmetric
+    # Square planar (D4h) — centrosymmetric
     ("square planar", "M–N stretch",  "IR"):    False,
     ("square planar", "M–N stretch",  "Raman"): True,
     ("square planar", "M–Cl stretch", "IR"):    False,
@@ -143,9 +137,7 @@ SELECTION_RULES: dict[tuple, bool] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# CorrectedBand — a BandRecord with an adjusted wavenumber
-# ---------------------------------------------------------------------------
+# CorrectedBand : BandRecord with adjusted wavenumber
 
 @dataclass
 class CorrectedBand:
@@ -185,17 +177,13 @@ class CorrectedBand:
         return self.corrected_center
 
 
-# ---------------------------------------------------------------------------
-# PredictionResult dataclass
-# ---------------------------------------------------------------------------
 
 @dataclass
 class PredictionResult:
     """
-    The output of predict_spectrum().
+    output of predict_spectrum().
 
-    Attributes
-    ----------
+    Attributes :
     bands : list[CorrectedBand]
         All predicted bands after corrections, sorted by wavenumber.
     intensities : list[float]
@@ -267,10 +255,6 @@ class PredictionResult:
         return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# Main public function
-# ---------------------------------------------------------------------------
- 
 
 def predict_spectrum(
     parsed:            ParsedComplex,
@@ -288,7 +272,7 @@ def predict_spectrum(
     spectrum_type : str
         "IR" or "Raman".
     db : IRBandDB, optional
-        Existing database instance. If None a fresh one is created.
+        Existing database instance. If None a new one is created.
     apply_corrections : bool
         If True (default), apply backbonding, coordination shift, and
         selection rule corrections. Set to False to get raw database
@@ -298,9 +282,7 @@ def predict_spectrum(
     -------
     PredictionResult
     """
-    # ------------------------------------------------------------------
     # Validate inputs
-    # ------------------------------------------------------------------
     spectrum_type = spectrum_type.upper()
     if spectrum_type == "IR":
         query_spectrum_type = "IR"
@@ -327,7 +309,7 @@ def predict_spectrum(
             report = geometry_report(parsed)
             geometry = report["geometry"]
     except Exception:
-        geometry = None   # if geometry fails, selection rules are skipped
+        geometry = None   
     selection_geometry = geometry_for_selection_rules(parsed, geometry)
 
     for ligand_formula, ligand_count in parsed.ligands.items():
@@ -410,9 +392,7 @@ def predict_spectrum(
     )
 
 
-# ---------------------------------------------------------------------------
-# Correction function 1 — Backbonding
-# ---------------------------------------------------------------------------
+# Correction function : Backbonding
 
 def apply_backbonding_correction(
     band:            CorrectedBand,
@@ -452,9 +432,7 @@ def apply_backbonding_correction(
     )
 
 
-# ---------------------------------------------------------------------------
-# Correction function 2 — Coordination shift
-# ---------------------------------------------------------------------------
+# Correction function : Coordination shift
 
 def apply_coordination_shift(
     band:           CorrectedBand,
@@ -464,9 +442,7 @@ def apply_coordination_shift(
     Shift bands stored as free-ligand values to their coordinated positions.
 
     When a ligand binds to a metal, its vibrational frequencies shift
-    from the free-ligand values. For example:
-    - NH3 N-H stretch: ~3400 cm⁻¹ (free) → ~3250 cm⁻¹ (coordinated)
-    - H2O O-H stretch: ~3600 cm⁻¹ (free) → ~3400 cm⁻¹ (coordinated)
+    from the free-ligand values. 
 
     Only applies to bands with coordination mode "free" in the database,
     since coordinated values are already stored at the correct position.
@@ -491,9 +467,7 @@ def apply_coordination_shift(
     )
 
 
-# ---------------------------------------------------------------------------
-# Correction function 3 — Selection rules
-# ---------------------------------------------------------------------------
+# Correction function : Selection rules
 
 def apply_selection_rules(
     band:          CorrectedBand,
@@ -505,14 +479,13 @@ def apply_selection_rules(
     observable for a given geometry and spectrum type.
 
     The mutual exclusion principle: in complexes with a centre of
-    inversion (octahedral Oh, square planar D4h), a vibrational mode
+    inversion (octahedral Oh, square planar D4h with all the same ligands), a vibrational mode
     cannot be both IR and Raman active simultaneously.
 
     Complexes without an inversion centre (tetrahedral Td, linear) have
     no such restriction.
 
-    If geometry is unknown, the band is kept active (conservative approach —
-    better to show too many bands than to silently remove real ones).
+    If geometry is unknown, the band is kept active (better to show too many bands than to silently remove real ones)
     """
     if geometry is None:
         return band
@@ -530,7 +503,7 @@ def apply_selection_rules(
                 active             = is_active,
             )
 
-    return band   # not in table — keep active
+    return band  
 
 
 def geometry_for_selection_rules(
@@ -539,14 +512,6 @@ def geometry_for_selection_rules(
 ) -> Optional[str]:
     """
     Return a geometry only when simple high-symmetry selection rules are safe.
-
-    The current rules assume ideal point groups:
-    - octahedral A6 -> approx. Oh
-    - square planar A4 -> approx. D4h
-    - tetrahedral A4 -> approx. Td
-
-    Mixed-ligand complexes, chelates, and ambiguous/lower-symmetry cases keep
-    all bands active because forbidden modes can become allowed.
     """
     if geometry is None:
         return None
@@ -600,9 +565,9 @@ def filter_ambidentate_bands(
     ]
 
 
-# ---------------------------------------------------------------------------
+ 
 # Helper
-# ---------------------------------------------------------------------------
+
 
 def _scale_intensity(intensity_label: str, ligand_count: int) -> float:
     """Convert intensity label to number and scale by ligand count."""

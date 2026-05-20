@@ -20,9 +20,6 @@ import os
 import re
 
 
-# ---------------------------------------------------------------------------
-# Data class for a single band record
-# ---------------------------------------------------------------------------
 
 @dataclass
 class BandRecord:
@@ -30,10 +27,10 @@ class BandRecord:
     coordination:    str       # "terminal", "bridging", "free", "chelate", "any"
     metal:           str       # "any", or specific symbol e.g. "Fe"
     spectrum_type:   str       # "IR" or "Raman"
-    wn_min:          float     # wavenumber range minimum (cm⁻¹)
-    wn_max:          float     # wavenumber range maximum (cm⁻¹)
+    wn_min:          float     # (cm⁻¹)
+    wn_max:          float     # (cm⁻¹)
     intensity:       str       # "very strong", "strong", "medium", "weak"
-    assignment:      str       # e.g. "C≡N stretch"
+    assignment:      str       
     ir_active:       bool
     raman_active:    bool
     source:          str       # bibliographic reference
@@ -56,9 +53,6 @@ class BandRecord:
         )
 
 
-# ---------------------------------------------------------------------------
-# Seed data — curated from Nakamoto 6th ed. and NIST
-# ---------------------------------------------------------------------------
 # Each tuple:
 # (ligand, coordination, metal, spectrum_type,
 #  wn_min, wn_max, intensity, assignment, ir_active, raman_active, source)
@@ -396,9 +390,6 @@ SEED_BANDS = [
     
     # =========================================================================
     # 1,10-PHENANTHROLINE  phen   (Nakamoto Vol.2 pp. 302–315)
-    # Very similar to bipyridine but with an extra fused ring.
-    # Diagnostic bands: ring stretches around 1500–1600 cm⁻¹,
-    # strong C-H out-of-plane bends around 730–850 cm⁻¹.
     # =========================================================================
     ("phen", "chelate", "any", "IR",   3020, 3080, "medium",      "C–H stretch (aromatic)",      True,  False, "Nakamoto Vol.2 p.304"),
     ("phen", "chelate", "any", "IR",   1580, 1640, "strong",      "C=C / C=N ring stretch",      True,  False, "Nakamoto Vol.2 p.304"),
@@ -415,8 +406,6 @@ SEED_BANDS = [
 
     # =========================================================================
     # 2,2'-BIPYRIDINE  bipy / bpy   (Nakamoto Vol.2 pp. 302–315)
-    # Very similar to phen. Key difference: slightly lower ring stretch
-    # frequencies due to less conjugation. M-N stretch is diagnostic.
     # =========================================================================
     ("bipy", "chelate", "any", "IR",   3000, 3080, "medium",      "C–H stretch (aromatic)",      True,  False, "Nakamoto Vol.2 p.303"),
     ("bipy", "chelate", "any", "IR",   1590, 1640, "strong",      "C=C / C=N ring stretch",      True,  False, "Nakamoto Vol.2 p.304"),
@@ -442,9 +431,6 @@ SEED_BANDS = [
 
     # =========================================================================
     # TERPYRIDINE  tpy / terpy   (Nakamoto Vol.2 pp. 302–315)
-    # Tridentate version of bipyridine. Three pyridine rings.
-    # Very similar band pattern to bipy but slightly shifted due to
-    # the additional ring and meridional coordination mode.
     # =========================================================================
     ("tpy",  "chelate", "any", "IR",   3000, 3090, "medium",      "C–H stretch (aromatic)",      True,  False, "Nakamoto Vol.2 p.303"),
     ("tpy",  "chelate", "any", "IR",   1580, 1630, "strong",      "C=C / C=N ring stretch",      True,  False, "Nakamoto Vol.2 p.304"),
@@ -465,9 +451,6 @@ SEED_BANDS = [
 
     # =========================================================================
     # EDTA  ethylenediaminetetraacetato   (Nakamoto Vol.2 pp. 195–230)
-    # Hexadentate ligand — four carboxylate arms + two amine nitrogens.
-    # Dominant bands: carboxylate C=O stretches (very strong),
-    # C-N stretches, and M-N/M-O stretches.
     # =========================================================================
     ("EDTA", "chelate", "any", "IR",   1580, 1650, "very strong", "COO⁻ asym. stretch",          True,  False, "Nakamoto Vol.2 p.218"),
     ("EDTA", "chelate", "any", "IR",   1380, 1420, "strong",      "COO⁻ sym. stretch",           True,  False, "Nakamoto Vol.2 p.218"),
@@ -491,10 +474,6 @@ SEED_BANDS = [
 
     # =========================================================================
     # CYCLOPENTADIENYL  Cp   (Nakamoto Vol.2 pp. 334–360)
-    # η5-ligand — bonds through all five carbon atoms (hapticity 5).
-    # Very characteristic: C-H stretch ~3080 cm⁻¹, ring stretch ~1400 cm⁻¹,
-    # C-H out-of-plane bend ~800 cm⁻¹, and M-ring tilt/stretch below 500.
-    # Ferrocene [Fe(Cp)2] is the benchmark complex.
     # =========================================================================
     ("Cp",   "chelate", "any", "IR",   3060, 3110, "medium",      "C–H stretch (Cp ring)",       True,  False, "Nakamoto Vol.2 p.336"),
     ("Cp",   "chelate", "any", "IR",   1390, 1440, "strong",      "C=C ring stretch",            True,  False, "Nakamoto Vol.2 p.337"),
@@ -514,8 +493,6 @@ SEED_BANDS = [
 
     # =========================================================================
     # TRIMETHYLPHOSPHINE  PMe3   (Nakamoto Vol.2 pp. 326–333; Socrates p.221)
-    # Monodentate P-donor ligand. Key bands: P-C stretch ~700 cm⁻¹,
-    # C-H stretches ~2900 cm⁻¹, and M-P stretch (Raman active) ~200–350 cm⁻¹.
     # =========================================================================
     ("PMe3", "terminal", "any", "IR",  2880, 2980, "medium",      "C–H stretch (CH₃)",           True,  False, "Socrates p.221"),
     ("PMe3", "terminal", "any", "IR",  1400, 1460, "medium",      "CH₃ deformation",             True,  False, "Socrates p.221"),
@@ -529,8 +506,6 @@ SEED_BANDS = [
 
     # =========================================================================
     # TRIETHYLPHOSPHINE  PEt3   (Nakamoto Vol.2 pp. 326–333; Socrates p.222)
-    # Similar to PMe3 but with ethyl groups. P-C stretch shifts slightly.
-    # Additional CH₂ bands from the ethyl chains.
     # =========================================================================
     ("PEt3", "terminal", "any", "IR",  2850, 2980, "medium",      "C–H stretch (CH₂/CH₃)",      True,  False, "Socrates p.222"),
     ("PEt3", "terminal", "any", "IR",  1440, 1470, "medium",      "CH₂ scissor",                 True,  False, "Socrates p.222"),
@@ -544,9 +519,6 @@ SEED_BANDS = [
 
     # =========================================================================
     # METHYL  CH3⁻   (Nakamoto Vol.2 pp. 361–375; Socrates p.48)
-    # Ligand alkyle sigma-donneur. Bandes diagnostiques :
-    # C-H stretch ~2900 cm⁻¹, déformation CH3 ~1200 cm⁻¹,
-    # M-C stretch ~400–600 cm⁻¹ (très diagnostic).
     # =========================================================================
     ("CH3", "terminal", "any", "IR",   2900, 2990, "strong",      "C–H stretch (CH₃)",           True,  False, "Nakamoto Vol.2 p.362"),
     ("CH3", "terminal", "any", "IR",   2800, 2870, "medium",      "C–H sym. stretch (CH₃)",      True,  False, "Nakamoto Vol.2 p.362"),
@@ -564,9 +536,7 @@ SEED_BANDS = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Database class
-# ---------------------------------------------------------------------------
 
 class IRBandDB:
     """
@@ -586,10 +556,7 @@ class IRBandDB:
         self._create_table()
         self._seed()
 
-    # ------------------------------------------------------------------
     # Setup
-    # ------------------------------------------------------------------
-
     def _create_table(self) -> None:
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS ir_ra_bands (
@@ -629,17 +596,15 @@ class IRBandDB:
         """, SEED_BANDS)
         self._conn.commit()
 
-    # ------------------------------------------------------------------
-    # Public query interface
-    # ------------------------------------------------------------------
 
+    # Public query interface
     def get_bands(
         self,
         ligand:          str,
         spectrum_type:   str           = "IR",
         coordination:    Optional[str] = None,
         metal:           Optional[str] = None,
-        oxidation_state: Optional[int] = None,   # reserved for future use
+        oxidation_state: Optional[int] = None,   
     ) -> list[BandRecord]:
         """
         Retrieve band records for a ligand.
@@ -678,14 +643,11 @@ class IRBandDB:
         rows = self._conn.execute(query, params).fetchall()
 
         # If a specific metal is given, prefer metal-specific rows
-        # and fall back to "any" rows only when no specific row exists
         if metal:
             specific   = [r for r in rows if r["metal"] == metal]
             generic    = [r for r in rows if r["metal"] == "any"]
 
-            # Keep only generic rows whose band family is not already covered
-            # by a metal-specific row. For example, Ni-Cl stretch should
-            # replace the generic M-Cl stretch in the app, not duplicate it.
+            # Keep only generic rows whose band family is not already covered by a metal-specific row. 
             covered = {
                 self._band_family_key(r, metal)
                 for r in specific
@@ -711,9 +673,7 @@ class IRBandDB:
 
     def get_all_ligands(self) -> list[str]:
         """Return all ligand symbols present in the database."""
-        rows = self._conn.execute(
-            "SELECT DISTINCT ligand FROM ir_ra_bands ORDER BY ligand"
-        ).fetchall()
+        rows = self._conn.execute().fetchall()
         return [r[0] for r in rows]
 
     def get_bands_in_range(
@@ -724,7 +684,6 @@ class IRBandDB:
     ) -> list[BandRecord]:
         """
         Find all bands whose range overlaps [wn_low, wn_high].
-        Useful for identifying what ligand a mystery peak might belong to.
         """
         rows = self._conn.execute("""
             SELECT * FROM ir_ra_bands
@@ -778,9 +737,6 @@ class IRBandDB:
                 )
         print()
 
-    # ------------------------------------------------------------------
-    # Internal
-    # ------------------------------------------------------------------
 
     def _row_to_record(self, row: sqlite3.Row) -> BandRecord:
         return BandRecord(

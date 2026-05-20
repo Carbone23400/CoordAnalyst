@@ -13,7 +13,7 @@ from __future__ import annotations
 
 
 # Very simplified classification.
-# This can be extended later.
+
 HARD_METALS = {
     "Sc", "Ti", "V", "Cr", "Mn",
     "Fe", "Co",  # mostly when oxidation state is high
@@ -24,7 +24,7 @@ HARD_METALS = {
 
 SOFT_METALS = {
     "Pd", "Pt", "Ag", "Au", "Hg", "Cd",
-    "Cu",  # especially Cu(I)
+    "Cu", 
 }
 
 BORDERLINE_METALS = {

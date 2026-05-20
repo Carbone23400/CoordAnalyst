@@ -36,14 +36,14 @@ def plot_spectrum(bands, intensities, title, sigma, invert=False):
     fig = go.Figure()
 
     if invert:
-        # Transmittance — no fill, just the line
+        # Transmittance : no fill
         fig.add_trace(go.Scatter(
             x=x, y=y,
             mode="lines",
             line=dict(color="#2563eb", width=2),
         ))
     else:
-        # Absorbance — fill under the curve
+        # Absorbance : fill under the curve
         fig.add_trace(go.Scatter(
             x=x, y=y,
             mode="lines",

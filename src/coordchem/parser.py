@@ -3,14 +3,7 @@ coordchem/parser.py
 -------------------
 Parses coordination complex formulas like [Fe(CN)6]4- into structured data.
 
-Supported formats:
-    [Fe(CN)6]4-
-    [Cu(NH3)4]2+
-    [Co(en)3]3+
-    [PtCl2(NH3)2]
-    [Fe(H2O)6]3+
-    K4[Fe(CN)6]          (with counter ions)
-    [CoCl2(en)2]+
+Supported formats:    ex. [Fe(CN)6]4- or K4[Fe(CN)6]
 """
 
 import re
@@ -19,9 +12,6 @@ from typing import Optional
 from .hsab import choose_ambidentate_donor
 
 
-# ---------------------------------------------------------------------------
-# Known ligands: formula → (name, charge, denticity, donor_atom)
-# ---------------------------------------------------------------------------
 KNOWN_LIGANDS: dict[str, tuple[str, int, int, str]] = {
     # formula        : (common_name,          charge, denticity, donor)
     "CN"            : ("cyano",                 -1,    1,      "C"),
@@ -61,7 +51,6 @@ KNOWN_LIGANDS: dict[str, tuple[str, int, int, str]] = {
     "CH3"           :("methyl",                     -1,     1,      "C"),
 }
 
-# Counter ions (outside the brackets)
 COUNTER_IONS: dict[str, int] = {
     "K"   :  1, "Na" :  1, "Li" :  1, "Rb" :  1, "Cs" :  1,
     "Ca"  :  2, "Ba" :  2, "Mg" :  2, "Sr" :  2,
@@ -97,7 +86,6 @@ COUNTER_ION_NAMES: dict[str, str] = {
     "PO4" : "phosphate",
 }
 
-# All known metal symbols (subset most relevant to coordination chemistry)
 METALS: set[str] = {
     "Li", "Be", "Na", "Mg", "Al", "K",  "Ca", "Sc", "Ti", "V",
     "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Rb", "Sr",
@@ -109,9 +97,7 @@ METALS: set[str] = {
 }
                   
 
-# ---------------------------------------------------------------------------
 # Data classes
-# ---------------------------------------------------------------------------
 
 @dataclass
 class ParsedComplex:
@@ -166,9 +152,7 @@ class ParsedComplex:
         return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------------
 
 def parse_formula(formula: str) -> ParsedComplex:
     """
@@ -195,8 +179,7 @@ def parse_formula(formula: str) -> ParsedComplex:
     # 1. Split counter ions from the complex bracket
     counter_ions, inner = _extract_counter_ions(formula)
 
-    # 2. Extract complex charge from suffix notation, or infer it from
-    # counter-ions when the charge is omitted.
+    # 2. Extract complex charge from suffix notation, or infer it from counter-ions 
     inner, complex_charge, has_explicit_charge = _extract_complex_charge(inner)
     if not has_explicit_charge and counter_ions:
         complex_charge = _infer_complex_charge_from_counter_ions(counter_ions)
@@ -225,9 +208,7 @@ def parse_formula(formula: str) -> ParsedComplex:
     return result
 
 
-# ---------------------------------------------------------------------------
 # Parsing helpers
-# ---------------------------------------------------------------------------
 
 def _extract_counter_ions(formula: str) -> tuple[dict[str, int], str]:
     """
@@ -238,10 +219,6 @@ def _extract_counter_ions(formula: str) -> tuple[dict[str, int], str]:
     """
     counter_ions: dict[str, int] = {}
 
-    # Pattern: optional leading cations + bracket complex + optional trailing anions
-    # Leading ions: e.g. K4, Na2, (NH4)2
-    # Trailing ions: e.g. Cl2, SO4, (NO3)2
-
     bracket_start = formula.find("[")
     bracket_end   = formula.rfind("]")
 
@@ -251,7 +228,7 @@ def _extract_counter_ions(formula: str) -> tuple[dict[str, int], str]:
 
     # Before the bracket
     before = formula[:bracket_start]
-    # After the bracket (may include charge AND counter ion, handle carefully)
+    # After the bracket (may include charge and counter ion)
     after_bracket = formula[bracket_end + 1:]
 
     # Parse leading counter ions
@@ -260,9 +237,7 @@ def _extract_counter_ions(formula: str) -> tuple[dict[str, int], str]:
         counter_ions.update(ions)
 
     # The charge suffix on the complex comes first after ]
-    # e.g. ]4- or ]2+ — we leave that for _extract_complex_charge
-    # Trailing counter ions would be something like ]Cl2 (rare) — try to detect
-    # For now we leave 'after_bracket' untouched; charge parser handles it.
+    # Trailing counter ions would be something like ]Cl2 (rare)
 
     charge_suffix, trailing_ion_text = _split_charge_suffix_and_trailing_ions(
         after_bracket
@@ -322,7 +297,6 @@ def _split_charge_suffix_and_trailing_ions(after_bracket: str) -> tuple[str, str
 
     Examples:
         "4-"    -> ("4-", "")
-        "Cl3"   -> ("", "Cl3")
         "3+Cl3" -> ("3+", "Cl3")
     """
     if not after_bracket:
@@ -338,10 +312,6 @@ def _split_charge_suffix_and_trailing_ions(after_bracket: str) -> tuple[str, str
 def _extract_complex_charge(formula: str) -> tuple[str, int, bool]:
     """
     Extract the charge suffix from a bracketed formula.
-
-    "[Fe(CN)6]4-"  →  ("[Fe(CN)6]", -4)
-    "[Cu(NH3)4]2+" →  ("[Cu(NH3)4]", +2)
-    "[PtCl2(NH3)2]"→  ("[PtCl2(NH3)2]", 0)
     """
     # Match ] followed by optional digit and +/-
     pattern = re.compile(r'(\])(\d*)([+-]?)$')
@@ -386,11 +356,7 @@ def _extract_metal(inner: str) -> tuple[str, str]:
     """
     Extract the metal symbol from the start of the inner formula.
 
-    "Fe(CN)6"       →  ("Fe", "(CN)6")
-    "CoCl2(NH3)4"   →  ("Co", "Cl2(NH3)4")
-    "Pt(NH3)2Cl2"   →  ("Pt", "(NH3)2Cl2")
-
-    Raises FormulaParseError if no metal found.
+    Raises FormulaParseError if no metal found/not placed at the beginning inside the brackets
     """
     # Try two-letter metals first, then one-letter
     for length in (2, 1):
@@ -407,18 +373,11 @@ def _extract_metal(inner: str) -> tuple[str, str]:
 def _parse_ligands(remainder: str) -> dict[str, int]:
     """
     Parse the ligand portion of an inner formula string.
-
-    "(CN)6"              →  {"CN": 6}
-    "Cl2(NH3)4"          →  {"Cl": 2, "NH3": 4}
-    "(en)3"              →  {"en": 3}
-    "Cl2(en)2"           →  {"Cl": 2, "en": 2}
-    "(NH3)2(H2O)2Cl2"    →  {"NH3": 2, "H2O": 2, "Cl": 2}
     """
     ligands: dict[str, int] = {}
     s = remainder
 
     while s:
-        # --- Bracketed ligand: (XX)n ---
         m = re.match(r'\(([^)]+)\)(\d*)', s)
         if m:
             lig_formula = m.group(1)
@@ -427,7 +386,7 @@ def _parse_ligands(remainder: str) -> dict[str, int]:
             s = s[m.end():]
             continue
 
-        # --- Known multi-character ligand abbreviations (en, acac, etc.) ---
+        # Known multi-character ligand abbreviations (en, acac, etc.) ---
         matched_abbrev = None
         for abbrev in sorted(KNOWN_LIGANDS.keys(), key=len, reverse=True):
             if s.startswith(abbrev):
@@ -447,7 +406,7 @@ def _parse_ligands(remainder: str) -> dict[str, int]:
             s = s[skip:]
             continue
 
-        # --- Unbracketed ligand: parse greedily using known ligand table ---
+        # Unbracketed ligand: parse greedily using known ligand table ---
         # Try longest match first
         found = False
         for lig in sorted(KNOWN_LIGANDS.keys(), key=len, reverse=True):
@@ -470,15 +429,13 @@ def _parse_ligands(remainder: str) -> dict[str, int]:
                 ligands[lig] = ligands.get(lig, 0) + count
                 s = s[m.end():]
             else:
-                # Cannot parse — skip one character to avoid infinite loop
+                # Cannot parse : skip one character to avoid infinite loop
                 s = s[1:]
 
     return ligands
 
 
-# ---------------------------------------------------------------------------
 # Enrichment — oxidation state, coordination number, ligand metadata
-# ---------------------------------------------------------------------------
 
 def _enrich(result: ParsedComplex) -> None:
     """Populate derived fields on a ParsedComplex."""
@@ -528,7 +485,7 @@ def _enrich(result: ParsedComplex) -> None:
             f"Double-check the formula and charge."
         )
     
-    # Generate IUPAC name if not already set (i.e. input was a formula)
+    # Generate IUPAC name if not already set (if input was a formula)
     if result.iupac_name is None:
         try:
             result.iupac_name = get_iupac_name(result)
@@ -557,7 +514,6 @@ def _apply_ambidentate_donor_assignments(result: ParsedComplex) -> None:
 def get_iupac_name(parsed) -> str:
     """
     Build a basic IUPAC name from a ParsedComplex object.
-    e.g. [Fe(CN)6]4- → hexacyanidoferrate(II)
     """
     # Number prefixes
     PREFIXES = {
@@ -566,7 +522,7 @@ def get_iupac_name(parsed) -> str:
         9: "nona",  10: "deca"
     }
 
-    # Build ligand part — alphabetical order by ligand name (IUPAC rule)
+    # Build ligand part : alphabetical order by ligand name (IUPAC rule)
     ligand_parts = []
     for lig, count in sorted(
         parsed.ligands.items(),
@@ -589,7 +545,6 @@ def get_iupac_name(parsed) -> str:
 
     ligand_str = "".join(ligand_parts)
 
-    # Metal name — lowercase
     ANION_METAL_NAMES = {
         "Fe": "ferrate", "Cu": "cuprate", "Co": "cobaltate",
         "Ni": "nickelate", "Cr": "chromate", "Mn": "manganate",
@@ -651,9 +606,8 @@ def _roman(n: int) -> str:
             n      -= value
     return f"−{result}" if neg else result
 
-# ---------------------------------------------------------------------------
+
 # Formatting helpers
-# ---------------------------------------------------------------------------
 
 def _format_charge(charge: int) -> str:
     if charge == 0:
@@ -661,9 +615,7 @@ def _format_charge(charge: int) -> str:
     return f"+{charge}" if charge > 0 else str(charge)
 
 
-# ---------------------------------------------------------------------------
 # Custom exception
-# ---------------------------------------------------------------------------
 
 class FormulaParseError(ValueError):
     """Raised when a formula string cannot be parsed."""
