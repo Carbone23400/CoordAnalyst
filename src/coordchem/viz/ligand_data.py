@@ -43,6 +43,7 @@ LIGAND_SMILES: dict[str, str] = {
     "PPh3": "P(c1ccccc1)(c1ccccc1)c1ccccc1",
     "PMe3": "P(C)(C)C",
     "PEt3": "P(CC)(CC)CC",
+    "H": "[H-]",
 }
 
 
@@ -74,6 +75,7 @@ LIGAND_DONOR_INDEX_OVERRIDES: dict[str, tuple[int, ...]] = {
     "PPh3": (0,),
     "PMe3": (0,),
     "PEt3": (0,),
+    "H": (0,),
 }
 
 
@@ -137,6 +139,7 @@ ABBREVIATED_MONODENTATE_LIGANDS: set[str] = {
     "PPh3",
     "PMe3",
     "PEt3",
+    "H",
 }
 
 LIGAND_DISPLAY_LABELS: dict[str, tuple[str, str]] = {
@@ -165,6 +168,7 @@ MONODENTATE_DISPLAY_LABELS: dict[str, tuple[str, str]] = {
     "PPh3": ("PPh3", "Ph3P"),
     "PMe3": ("PMe3", "Me3P"),
     "PEt3": ("PEt3", "Et3P"),
+    "H": ("H", "H"),
 }
 
 POLYDENTATE_DONOR_DISPLAY_LABELS: dict[str, dict[int, tuple[str, str]]] = {

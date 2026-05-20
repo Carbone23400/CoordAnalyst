@@ -193,6 +193,13 @@ class TestBuildComplex:
         donor_symbols = _metal_donor_symbols(mol)
         assert donor_symbols == ["O"] * 6
 
+    def test_uppercase_dmso_3d_uses_same_donor_logic(self):
+        parsed = parse_formula("[Fe(DMSO)6]3+")
+        mol = build_complex_3d(parsed)
+
+        assert parsed.ligands == {"dmso": 6}
+        assert _metal_donor_symbols(mol) == ["O"] * 6
+
     def test_dmso_soft_metal_uses_sulfur_donor(self):
         parsed = parse_formula("[Pt(dmso)4]2+")
         mol = build_complex_3d(parsed)
@@ -215,6 +222,22 @@ class TestBuildComplex:
             all(neighbor.GetSymbol() != "H" for neighbor in atom.GetNeighbors())
             for atom in sulfur_donors
         )
+
+    def test_hydride_complex_builds_h_donors(self):
+        parsed = parse_formula("[FeH6]4-")
+        mol = build_complex_3d(parsed)
+
+        donor_symbols = _metal_donor_symbols(mol)
+        hydride_donors = [
+            mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0))
+            for bond in mol.GetAtomWithIdx(0).GetBonds()
+            if mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0)).GetSymbol() == "H"
+        ]
+
+        assert parsed.ligands == {"H": 6}
+        assert donor_symbols == ["H"] * 6
+        assert len(hydride_donors) == 6
+        assert all(atom.GetFormalCharge() == -1 for atom in hydride_donors)
 
 
 # ---------------------------------------------------------------------------
