@@ -196,7 +196,7 @@ def _monodentate_label_atom(
         donor_symbol = LIGAND_SMILES.get(ligand_symbol, ligand_symbol)
         donor_symbol = donor_symbol.strip("[]+-0123456789")
 
-    if donor_symbol not in {"B", "C", "N", "O", "F", "P", "S", "Cl", "Br", "I"}:
+    if donor_symbol not in {"B", "C", "N", "O", "F", "P", "S", "Cl", "Br", "I", "H"}:
         donor_symbol = "C"
 
     atom = Chem.Atom(donor_symbol)
