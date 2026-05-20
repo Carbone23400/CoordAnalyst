@@ -56,7 +56,7 @@ Before installing **CoordAnalyst**, make sure you have the following:
 ### Step 1 — Clone the repository
 
 ```bash
-git clone https://github.com/Carbone23400/Project-Xplosion-Ba4.git
+git clone https://github.com/Carbone23400/CoordAnalyst.git
 cd Project-Xplosion-Ba4
 ```
 

@@ -1,7 +1,7 @@
 """
 tests/test_predictor.py
 -----------------------
-Test suite for src.spectra.predictor
+Test suite for src.coordchem.spectra.predictor
 
 Run with:  python -m pytest tests/test_predictor.py -v
 """
@@ -213,13 +213,13 @@ class TestIntensityScaling:
         """[Fe(CN)6]4- has 6 CN — intensities should be 3× those of [Fe(CN)2]."""
         # We compare the same band type at different counts
         # by directly calling the helper
-        from src.spectra.predictor import _scale_intensity
+        from src.coordchem.spectra.predictor import _scale_intensity
         i6 = _scale_intensity("strong", 6)
         i2 = _scale_intensity("strong", 2)
         assert i6 == pytest.approx(3 * i2)
 
     def test_very_strong_greater_than_weak(self):
-        from src.spectra.predictor import _scale_intensity
+        from src.coordchem.spectra.predictor import _scale_intensity
         assert _scale_intensity("very strong", 1) > _scale_intensity("weak", 1)
 
     def test_intensity_scale_covers_all_labels(self):

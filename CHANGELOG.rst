@@ -19,7 +19,7 @@ New Features
 - Geometry prediction based on coordination number and d-electron
   count (``coordchem.geometry``)
 - IR and Raman band database seeded from Nakamoto 6th ed. covering
-  30+ ligands and 200+ band entries (``coordchem.database``)
+  30+ ligands and 200+ band entries (``data.ir_ra_bands``)
 - Spectrum predictor with backbonding corrections, coordination
   shifts, and symmetry selection rules (``coordchem.spectra.predictor``)
 - Gaussian broadening renderer with absorbance and transmittance
@@ -28,4 +28,4 @@ New Features
 - Interactive 3D molecular viewer using py3Dmol
 - Streamlit web application with sidebar controls, ligand details,
   and band assignment table
-- 162 unit tests across parser, database, and predictor modules
+- 400 unit tests across parser, database, and predictor modules
