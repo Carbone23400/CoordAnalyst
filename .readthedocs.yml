@@ -8,10 +8,6 @@ version: 2
 sphinx:
   configuration: docs/conf.py
 
-# Build documentation with MkDocs
-#mkdocs:
-#  configuration: mkdocs.yml
-
 # Optionally build your docs in additional formats such as PDF
 formats:
   - pdf
@@ -19,9 +15,12 @@ formats:
 build:
   os: ubuntu-22.04
   tools:
-    python: "3.11"
+    python: "3.10"       # ← change from 3.11 to 3.10 to match your project
 
 python:
   install:
     - requirements: docs/requirements.txt
-    - {path: ., method: pip}
+    - method: pip        # ← fix the syntax here
+      path: .
+      extra_requirements:
+        - dev            # ← add this so pytest and other dev deps are available
