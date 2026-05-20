@@ -1104,6 +1104,12 @@ def test_dmso_2d_uses_oxygen_donor_for_hard_metal():
     assert _metal_donor_symbols(mol) == ["O"] * 6
 
 
+def test_uppercase_dmso_2d_uses_same_donor_logic():
+    mol = build_coordination_mol("[Fe(DMSO)6]3+")
+
+    assert _metal_donor_symbols(mol) == ["O"] * 6
+
+
 def test_dmso_2d_uses_sulfur_donor_for_soft_metal():
     mol = build_coordination_mol("[Pt(dmso)4]2+")
 
@@ -1123,6 +1129,20 @@ def test_dmso_2d_sulfur_donor_has_no_implicit_hydrogen():
     assert len(sulfur_donors) == 4
     assert all(atom.GetNumExplicitHs() == 0 for atom in sulfur_donors)
     assert all(atom.GetNoImplicit() for atom in sulfur_donors)
+
+
+def test_hydride_2d_draws_h_labels_without_minus_charge():
+    mol = build_coordination_mol("[FeH6]4-")
+
+    donor_atoms = [
+        mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0))
+        for bond in mol.GetBonds()
+        if 0 in {bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()}
+    ]
+
+    assert [atom.GetSymbol() for atom in donor_atoms] == ["H"] * 6
+    assert all(atom.GetFormalCharge() == 0 for atom in donor_atoms)
+    assert {atom.GetProp("atomLabel") for atom in donor_atoms} == {"H"}
 
 
 def test_ambiguous_dmso_svg_draws_s_and_o_bound_panels():

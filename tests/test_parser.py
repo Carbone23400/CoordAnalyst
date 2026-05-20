@@ -437,6 +437,13 @@ class TestHSABDonorAssignment:
         assert r.donor_atoms["dmso"] == "O"
         assert any("HSAB" in warning for warning in r.warnings)
 
+    def test_uppercase_dmso_is_accepted_as_dmso_alias(self):
+        r = parse("[Fe(DMSO)6]3+")
+
+        assert r.ligands == {"dmso": 6}
+        assert r.ligand_names["dmso"] == "dimethylsulfoxide"
+        assert r.donor_atoms["dmso"] == "O"
+
     def test_dmso_binds_through_sulfur_for_soft_metal(self):
         r = parse("[Pt(dmso)4]2+")
 
@@ -450,3 +457,22 @@ class TestHSABDonorAssignment:
         assert r.oxidation_state == 2
         assert r.donor_atoms["dmso"] == "S/O"
         assert any("ambiguous" in warning for warning in r.warnings)
+
+
+class TestHydrideLigand:
+    def test_hydride_ligand_is_known_as_h(self):
+        r = parse("[FeH6]4-")
+
+        assert r.ligands == {"H": 6}
+        assert r.ligand_names["H"] == "hydrido"
+        assert r.ligand_charges["H"] == -1
+        assert r.donor_atoms["H"] == "H"
+        assert r.oxidation_state == 2
+        assert r.coordination_number == 6
+
+    def test_parenthesized_h_minus_is_accepted_as_hydride_alias(self):
+        r = parse("[Fe(H-)6]4-")
+
+        assert r.ligands == {"H": 6}
+        assert r.ligand_charges["H"] == -1
+        assert r.oxidation_state == 2

@@ -49,6 +49,12 @@ KNOWN_LIGANDS: dict[str, tuple[str, int, int, str]] = {
     "PMe3"          : ("trimethylphosphine",         0,    1,      "P"),
     "PEt3"          : ("triethylphosphine",          0,    1,      "P"),
     "CH3"           :("methyl",                     -1,     1,      "C"),
+    "H"             : ("hydrido",                   -1,     1,      "H"),
+}
+
+LIGAND_ALIASES: dict[str, str] = {
+    "DMSO": "dmso",
+    "H-": "H",
 }
 
 COUNTER_IONS: dict[str, int] = {
@@ -376,11 +382,16 @@ def _parse_ligands(remainder: str) -> dict[str, int]:
     """
     ligands: dict[str, int] = {}
     s = remainder
+    ligand_tokens = sorted(
+        set(KNOWN_LIGANDS) | set(LIGAND_ALIASES),
+        key=len,
+        reverse=True,
+    )
 
     while s:
         m = re.match(r'\(([^)]+)\)(\d*)', s)
         if m:
-            lig_formula = m.group(1)
+            lig_formula = _canonical_ligand_symbol(m.group(1))
             count       = int(m.group(2)) if m.group(2) else 1
             ligands[lig_formula] = ligands.get(lig_formula, 0) + count
             s = s[m.end():]
@@ -388,7 +399,7 @@ def _parse_ligands(remainder: str) -> dict[str, int]:
 
         # Known multi-character ligand abbreviations (en, acac, etc.) ---
         matched_abbrev = None
-        for abbrev in sorted(KNOWN_LIGANDS.keys(), key=len, reverse=True):
+        for abbrev in ligand_tokens:
             if s.startswith(abbrev):
                 # Make sure it's not the start of a longer token
                 after = s[len(abbrev):]
@@ -402,20 +413,22 @@ def _parse_ligands(remainder: str) -> dict[str, int]:
             count_m = re.match(r'(\d+)', after)
             count   = int(count_m.group(1)) if count_m else 1
             skip    = len(matched_abbrev) + (len(count_m.group(1)) if count_m else 0)
-            ligands[matched_abbrev] = ligands.get(matched_abbrev, 0) + count
+            lig_formula = _canonical_ligand_symbol(matched_abbrev)
+            ligands[lig_formula] = ligands.get(lig_formula, 0) + count
             s = s[skip:]
             continue
 
         # Unbracketed ligand: parse greedily using known ligand table ---
         # Try longest match first
         found = False
-        for lig in sorted(KNOWN_LIGANDS.keys(), key=len, reverse=True):
+        for lig in ligand_tokens:
             if s.startswith(lig):
                 after   = s[len(lig):]
                 count_m = re.match(r'(\d+)', after)
                 count   = int(count_m.group(1)) if count_m else 1
                 skip    = len(lig) + (len(count_m.group(1)) if count_m else 0)
-                ligands[lig] = ligands.get(lig, 0) + count
+                lig_formula = _canonical_ligand_symbol(lig)
+                ligands[lig_formula] = ligands.get(lig_formula, 0) + count
                 s    = s[skip:]
                 found = True
                 break
@@ -424,7 +437,7 @@ def _parse_ligands(remainder: str) -> dict[str, int]:
             # Try to parse as a raw element symbol + count (fallback)
             m = re.match(r'([A-Z][a-z]?)(\d*)', s)
             if m:
-                lig   = m.group(1)
+                lig   = _canonical_ligand_symbol(m.group(1))
                 count = int(m.group(2)) if m.group(2) else 1
                 ligands[lig] = ligands.get(lig, 0) + count
                 s = s[m.end():]
@@ -433,6 +446,11 @@ def _parse_ligands(remainder: str) -> dict[str, int]:
                 s = s[1:]
 
     return ligands
+
+
+def _canonical_ligand_symbol(ligand_symbol: str) -> str:
+    """Return the internal ligand key used by the data tables."""
+    return LIGAND_ALIASES.get(ligand_symbol, ligand_symbol)
 
 
 # Enrichment — oxidation state, coordination number, ligand metadata

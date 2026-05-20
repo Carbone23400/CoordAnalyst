@@ -225,7 +225,7 @@ with st.sidebar:
         invert    = False
     st.caption("**Supported ligands** : CN, NC, CO, NO, Cl, Br, I, F, OH, O, S, NH3, " \
     "H2O, NO2, ONO, SCN, NCS, N3, en, phen, bipy, ox, acac, " \
-    "EDTA, Cp, tpy, py, dmso, PPh3, PMe3, PEt3, CH3.")
+    "EDTA, Cp, tpy, py, dmso/DMSO, PPh3, PMe3, PEt3, CH3, H.")
 
 if not user_input.strip():
     st.info("Enter a formula or name in the sidebar and click **Analyze**.")
