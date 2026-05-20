@@ -6,25 +6,20 @@ SCN, NCS, N3, en, phen, bipy, ox, acac, EDTA, Cp, tpy, py, dmso, PPh3, PMe3, PEt
 
 | Complex Name                                    | Formula             |
 | ----------------------------------------------- | ------------------- |
-| Hexacyanoferrate(II)                            | [Fe(CN)6]4−         |
 | Tetracyanonickelate(II)                         | [Ni(CN)4]2−         |
 | Pentacyanonitrosylferrate(II) (nitroprusside)   | [Fe(CN)5(NO)]2−     |
 | Chromium hexacarbonyl                           | Cr(CO)6             |
 | Tetraamminecopper(II)                           | [Cu(NH3)4]2+        |
 | Pentaamminechlorocobalt(III)                    | [Co(NH3)5Cl]2+      |
-| Cisplatin                                       | cis-[PtCl2(NH3)2]   |
-| Transplatin                                     | trans-[PtCl2(NH3)2] |
+| Dichlorodiammineplatinum(II)                    | [PtCl2(NH3)2]       |
 | Tetraaquadichlorochromium(III)                  | [Cr(H2O)4Cl2]+      |
-| Hexahydroxoplatinate(IV)                        | [Pt(OH)6]2−         |
 | Tetrahydroxozincate(II)                         | [Zn(OH)4]2−         |
 | Tetrachloroplatinate(II)                        | [PtCl4]2−           |
-| Sodium nitroprusside                            | Na2[Fe(CN)5(NO)]    |
 | Pentaaquanitrosyliron(II)                       | [Fe(H2O)5(NO)]2+    |
 | Azidopentaamminecobalt(III)                     | [Co(NH3)5(N3)]2+    |
-| Thiocyanatoiron(III)                            | [Fe(SCN)]2+         |
 | Pentamminethiocyanatocobalt(III)                | [Co(NH3)5(SCN)]2+   |
 | Tetrathiocyanatomercurate(II)                   | [Hg(SCN)4]2−        |
-| Tetrachlorobis(dimethyl sulfoxide)ruthenium(II) | RuCl2(dmso)4        |
+| Tetrachlorobis(dimethyl sulfoxide)ruthenium(II) | RuCl2(DMSO)4        |
 | Tetrathiomolybdate(VI)                          | [MoS4]2−            |
 | Bis(ethylenediamine)copper(II)                  | [Cu(en)2]2+         |
 | Tris(1,10-phenanthroline)iron(II)               | [Fe(phen)3]2+       |
@@ -33,7 +28,6 @@ SCN, NCS, N3, en, phen, bipy, ox, acac, EDTA, Cp, tpy, py, dmso, PPh3, PMe3, PEt
 | Bis(acetylacetonato)copper(II)                  | Cu(acac)2           |
 | Tris(acetylacetonato)iron(III)                  | Fe(acac)3           |
 | Ethylenediaminetetraacetatocalcium(II)          | [Ca(EDTA)]2−        |
-| Ethylenediaminetetraacetatoiron(III)            | [Fe(EDTA)]−         |
 | Ferrocene                                       | Fe(Cp)2             |
 | Titanocene dichloride                           | Cp2TiCl2            |
 | Methylcyclopentadienyl manganese tricarbonyl    | CpMn(CO)3           |
