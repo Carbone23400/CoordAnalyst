@@ -615,6 +615,21 @@ def test_edta_svg_contains_correct_front_back_interruptions():
     assert svg.count("class='bond-23 atom-0 atom-16'") == 2
 
 
+def test_edta_oxygen_donors_display_without_minus_charges():
+    mol = build_coordination_mol("[Co(EDTA)]-")
+
+    donor_atoms = [
+        mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0))
+        for bond in mol.GetBonds()
+        if 0 in {bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()}
+    ]
+    oxygen_donors = [atom for atom in donor_atoms if atom.GetSymbol() == "O"]
+
+    assert len(oxygen_donors) == 4
+    assert all(atom.GetFormalCharge() == 0 for atom in oxygen_donors)
+    assert {atom.GetProp("atomLabel") for atom in oxygen_donors} == {"O"}
+
+
 def test_square_planar_cn4_projection_is_flat_cross():
     mol = build_coordination_mol("[PtCl4]2-")
     conf = mol.GetConformer()

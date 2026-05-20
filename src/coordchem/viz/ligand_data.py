@@ -23,7 +23,7 @@ LIGAND_SMILES: dict[str, str] = {
     "CO": "[C-]#[O+]",
     "NO": "[N]=O",
     "NO2": "O=[N+]([O-])",
-    "ONO": "O[N+](=O)[O-]",
+    "ONO": "[O-]N=O",
     "SCN": "[S-]C#N",
     "NCS": "N=C=[S-]",
     "N3": "[N-]=[N+]=N",
@@ -171,6 +171,18 @@ POLYDENTATE_DONOR_DISPLAY_LABELS: dict[str, dict[int, tuple[str, str]]] = {
     "en": {
         0: ("NH2", "H2N"),
         3: ("NH2", "H2N"),
+    },
+    "EDTA": {
+        4: ("O", "O"),
+        8: ("O", "O"),
+        15: ("O", "O"),
+        19: ("O", "O"),
+    },
+    "edta": {
+        4: ("O", "O"),
+        8: ("O", "O"),
+        15: ("O", "O"),
+        19: ("O", "O"),
     },
 }
 

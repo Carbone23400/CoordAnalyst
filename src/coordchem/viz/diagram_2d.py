@@ -162,6 +162,7 @@ def _copy_atom(atom: Chem.Atom, atom_label: str | None = None) -> Chem.Atom:
     new_atom.SetFormalCharge(atom.GetFormalCharge())
 
     if atom_label is not None:
+        new_atom.SetFormalCharge(0)
         new_atom.SetNumExplicitHs(0)
         new_atom.SetNoImplicit(True)
         new_atom.SetProp("atomLabel", atom_label)
