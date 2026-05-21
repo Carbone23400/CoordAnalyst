@@ -28,9 +28,7 @@ from coordchem.viz.ligand_data import LIGAND_SMILES
 from coordchem.viz.transform_2d import ACAC_COORDINATION_SCALE
 
 
-# ============================================================================
 # Test examples: coordination complexes only
-# ============================================================================
 
 SQUARE_PLANAR_COMPLEX = "[PtCl4]2-"
 TETRAAMMINE_COMPLEX = "[Cu(NH3)4]2+"
@@ -63,10 +61,7 @@ def _metal_bond_sites_by_label(mol):
 
     return sites
 
-
-# ============================================================================
 # Basic SVG generation
-# ============================================================================
 
 def test_diagram_2d_svg_returns_svg_string():
     svg = diagram_2d_svg(SQUARE_PLANAR_COMPLEX)
@@ -117,9 +112,7 @@ def test_diagram_2d_svg_does_not_print_generated_coordination_name_by_default():
     assert "ethylenediaminetetraacetatocobaltate(III)" not in svg
 
 
-# ============================================================================
 # Rendering behaviour
-# ============================================================================
 
 def test_diagram_renders_normally_without_highlight():
     svg = diagram_2d_svg(SQUARE_PLANAR_COMPLEX)
@@ -130,9 +123,7 @@ def test_diagram_renders_normally_without_highlight():
     assert "atom-" in svg
 
 
-# ============================================================================
 # Geometry / projection behaviour
-# ============================================================================
 
 def test_cn4_or_3d_projection_uses_depth_cues():
     svg = diagram_2d_svg(TETRAAMMINE_COMPLEX).lower()
@@ -151,9 +142,7 @@ def test_octahedral_projection_uses_depth_cues():
     assert "atom-" in svg
 
 
-# ============================================================================
 # Error handling
-# ============================================================================
 
 def test_diagram_2d_svg_rejects_invalid_complex():
     with pytest.raises(ValueError):
@@ -165,9 +154,7 @@ def test_diagram_2d_svg_rejects_invalid_size():
         diagram_2d_svg(SQUARE_PLANAR_COMPLEX, size=0)
 
 
-# ============================================================================
 # File writing
-# ============================================================================
 
 def test_save_diagram_2d_writes_svg_file():
     out_file = Path("outputs/fe_cn6.svg")
@@ -189,9 +176,7 @@ def test_save_diagram_2d_writes_svg_file():
     assert "atom-" in content
 
 
-# ============================================================================
 # Extra representative complexes
-# ============================================================================
 
 def test_square_planar_complex_draws():
     svg = diagram_2d_svg("[PdCl4]2-")
@@ -1086,7 +1071,22 @@ def test_acac_uses_enolate_bond_pattern():
     assert mol.GetBondBetweenAtoms(1, 2).GetBondType() == Chem.BondType.DOUBLE
     assert mol.GetBondBetweenAtoms(3, 4).GetBondType() == Chem.BondType.DOUBLE
     assert mol.GetBondBetweenAtoms(4, 5).GetBondType() == Chem.BondType.SINGLE
-    assert mol.GetAtomWithIdx(5).GetFormalCharge() == 0
+    assert mol.GetAtomWithIdx(5).GetFormalCharge() == -1
+
+
+def test_acac_oxygen_donors_display_without_minus_charges():
+    mol = build_coordination_mol("[Co(acac)3]")
+
+    donor_atoms = [
+        mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0))
+        for bond in mol.GetBonds()
+        if 0 in {bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()}
+    ]
+    oxygen_donors = [atom for atom in donor_atoms if atom.GetSymbol() == "O"]
+
+    assert len(oxygen_donors) == 6
+    assert all(atom.GetFormalCharge() == 0 for atom in oxygen_donors)
+    assert {atom.GetProp("atomLabel") for atom in oxygen_donors} == {"O"}
 
 
 def _metal_donor_symbols(mol):

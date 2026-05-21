@@ -11,17 +11,13 @@ import pytest
 from coordchem.parser import parse_formula
 from coordchem.geometry import get_geometry, predict_geometry, geometry_report, get_d_count
 
-# ===========================================================================
 # Helper
-# ===========================================================================
 
 def geom(formula: str) -> str:
     """Shorthand."""
     return get_geometry(formula)
 
-# ===========================================================================
 # 1. Basic geometry from formula
-# ===========================================================================
 
 class TestBasicGeometry:
     def test_linear_ag(self):
@@ -48,9 +44,7 @@ class TestBasicGeometry:
     def test_ambiguous_cu(self):
         assert geom("[Cu(NH3)4]2+") == "square planar or tetrahedral"
 
-# ===========================================================================
 # 2. Geometry from ParsedComplex object
-# ===========================================================================
 
 class TestParsedComplexInput:
     
@@ -63,9 +57,7 @@ class TestParsedComplexInput:
         assert get_geometry(parsed) == "square planar"
 
 
-# ===========================================================================
 # 2b. Geometry from compound name
-# ===========================================================================
 
 class TestCompoundNameInput:
 
@@ -81,9 +73,7 @@ class TestCompoundNameInput:
         assert report["coordination_number"] == 6
         assert report["geometry"] == "octahedral"
 
-# ===========================================================================
 # 3. Coordination number logic
-# ===========================================================================
 
 class TestCoordinationNumberRules:
 
@@ -113,9 +103,7 @@ class TestCoordinationNumberRules:
     def test_cn8(self, formula):
         assert geom(formula) == "square antiprismatic or dodecahedral"
 
-# ===========================================================================
 # 4. CN = 4 special cases 
-# ===========================================================================
 
 class TestCN4SpecialCases:
 
@@ -141,9 +129,7 @@ class TestCN4SpecialCases:
         assert geom("[CdCl4]2-") == "tetrahedral"
 
 
-# ===========================================================================
 # 5. Geometry report
-# ===========================================================================
 
 class TestGeometryReport:
 
@@ -172,9 +158,7 @@ class TestGeometryReport:
         assert report["ligands"] == {"en": 3}
 
 
-# ===========================================================================
 # 6. Error handling
-# ===========================================================================
 
 class TestErrorHandling:
 
@@ -186,9 +170,7 @@ class TestErrorHandling:
         with pytest.raises(Exception):
             get_geometry("[Xx(CN)6]4-")
 
-# ===========================================================================
 # 7. d-electron count
-# ===========================================================================
 
 class TestDCount:
 
@@ -215,9 +197,7 @@ class TestDCount:
         report = geometry_report("[PtCl2(NH3)2]")
         assert report["d_count"] == 8
 
-# ===========================================================================
 # 8. Real-world benchmark complexes
-# ===========================================================================
 
 class TestBenchmarkComplexes:
 

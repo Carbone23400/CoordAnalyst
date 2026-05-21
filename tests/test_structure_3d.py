@@ -7,6 +7,8 @@ Run with:
     python -m pytest tests/test_structure_3d.py -v
 """
 
+import math
+
 import pytest
 
 pytest.importorskip("rdkit")
@@ -24,6 +26,7 @@ from coordchem.viz.molecule3D import (  # noqa: E402
     octahedral_positions,
     parse_complex_input,
 )
+from coordchem.viz.ligand_data import LIGAND_SMILES  # noqa: E402
 
 
 class TestGeometryPositions:
@@ -186,6 +189,256 @@ class TestBuildComplex:
             for atom in methyl_carbons
         )
 
+    def test_acac_3d_oxygen_donors_have_no_hydrogen_neighbor(self):
+        parsed = parse_formula("[Co(acac)3]")
+        mol = build_complex_3d(parsed)
+
+        oxygen_donors = [
+            mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0))
+            for bond in mol.GetAtomWithIdx(0).GetBonds()
+            if mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0)).GetSymbol() == "O"
+        ]
+
+        assert len(oxygen_donors) == 6
+        assert all(
+            all(neighbor.GetSymbol() != "H" for neighbor in atom.GetNeighbors())
+            for atom in oxygen_donors
+        )
+
+    def test_acac_3d_metal_oxygen_carbon_angles_follow_chelate_shape(self):
+        parsed = parse_formula("[Co(acac)3]")
+        mol = build_complex_3d(parsed)
+
+        angles = _metal_oxygen_carbon_angles(mol)
+
+        assert len(angles) == 6
+        assert all(125.0 <= angle <= 145.0 for angle in angles)
+
+    def test_acac_3d_uses_realistic_backbone_bond_lengths(self):
+        parsed = parse_formula("[Co(acac)3]")
+        mol = build_complex_3d(parsed)
+
+        co_lengths = _bond_lengths_for_symbols(mol, {"C", "O"})
+        cc_lengths = _bond_lengths_for_symbols(mol, {"C"})
+        ch_lengths = _bond_lengths_for_symbols(mol, {"C", "H"})
+
+        assert len(co_lengths) == 6
+        assert len(cc_lengths) == 12
+        assert len(ch_lengths) == 21
+        assert all(length == pytest.approx(1.28, abs=0.03) for length in co_lengths)
+        assert all(1.35 <= length <= 1.55 for length in cc_lengths)
+        assert all(length == pytest.approx(1.09, abs=0.03) for length in ch_lengths)
+
+    def test_acac_3d_sp2_carbons_are_trigonal_planar(self):
+        parsed = parse_formula("[Co(acac)3]")
+        mol = build_complex_3d(parsed)
+
+        sp2_carbons = [
+            atom.GetIdx()
+            for atom in mol.GetAtoms()
+            if atom.GetSymbol() == "C"
+            and atom.GetDegree() == 3
+            and sum(1 for neighbor in atom.GetNeighbors() if neighbor.GetSymbol() == "H") <= 1
+        ]
+
+        assert len(sp2_carbons) == 9
+        for carbon_idx in sp2_carbons:
+            neighbors = [neighbor.GetIdx() for neighbor in mol.GetAtomWithIdx(carbon_idx).GetNeighbors()]
+            angles = [
+                _atom_angle(mol, neighbors[i], carbon_idx, neighbors[j])
+                for i in range(len(neighbors))
+                for j in range(i + 1, len(neighbors))
+            ]
+
+            assert sum(angles) == pytest.approx(360.0, abs=1e-6)
+            assert all(105.0 <= angle <= 135.0 for angle in angles)
+
+    def test_acac_3d_methyl_carbons_are_tetrahedral_sp3(self):
+        parsed = parse_formula("[Co(acac)3]")
+        mol = build_complex_3d(parsed)
+
+        methyl_carbons = [
+            atom.GetIdx()
+            for atom in mol.GetAtoms()
+            if atom.GetSymbol() == "C"
+            and sum(1 for neighbor in atom.GetNeighbors() if neighbor.GetSymbol() == "H") == 3
+        ]
+
+        assert len(methyl_carbons) == 6
+        for carbon_idx in methyl_carbons:
+            hydrogens = [
+                neighbor.GetIdx()
+                for neighbor in mol.GetAtomWithIdx(carbon_idx).GetNeighbors()
+                if neighbor.GetSymbol() == "H"
+            ]
+            heavy_neighbor = next(
+                neighbor.GetIdx()
+                for neighbor in mol.GetAtomWithIdx(carbon_idx).GetNeighbors()
+                if neighbor.GetSymbol() != "H"
+            )
+
+            for hydrogen_idx in hydrogens:
+                assert _atom_angle(
+                    mol,
+                    heavy_neighbor,
+                    carbon_idx,
+                    hydrogen_idx,
+                ) == pytest.approx(109.47, abs=0.5)
+
+            for i in range(len(hydrogens)):
+                for j in range(i + 1, len(hydrogens)):
+                    assert _atom_angle(
+                        mol,
+                        hydrogens[i],
+                        carbon_idx,
+                        hydrogens[j],
+                    ) == pytest.approx(109.47, abs=0.5)
+
+    def test_oxalate_3d_uses_realistic_carboxylate_lengths(self):
+        parsed = parse_formula("[Fe(ox)3]3-")
+        mol = build_complex_3d(parsed)
+
+        carbonyl_lengths = _bond_lengths_for_symbols_and_type(
+            mol,
+            {"C", "O"},
+            Chem.BondType.DOUBLE,
+        )
+        donor_co_lengths = _bond_lengths_for_symbols_and_type(
+            mol,
+            {"C", "O"},
+            Chem.BondType.SINGLE,
+        )
+        cc_lengths = _bond_lengths_for_symbols_and_type(
+            mol,
+            {"C"},
+            Chem.BondType.SINGLE,
+        )
+
+        assert len(carbonyl_lengths) == 6
+        assert len(donor_co_lengths) == 6
+        assert len(cc_lengths) == 3
+        assert all(length == pytest.approx(1.22, abs=0.03) for length in carbonyl_lengths)
+        assert all(length == pytest.approx(1.27, abs=0.03) for length in donor_co_lengths)
+        assert all(length == pytest.approx(1.54, abs=0.03) for length in cc_lengths)
+
+    def test_oxalate_3d_carbons_are_trigonal_planar(self):
+        parsed = parse_formula("[Fe(ox)3]3-")
+        mol = build_complex_3d(parsed)
+
+        oxalate_carbons = [
+            atom.GetIdx()
+            for atom in mol.GetAtoms()
+            if atom.GetSymbol() == "C"
+        ]
+
+        assert len(oxalate_carbons) == 6
+        for carbon_idx in oxalate_carbons:
+            neighbors = [neighbor.GetIdx() for neighbor in mol.GetAtomWithIdx(carbon_idx).GetNeighbors()]
+            angles = [
+                _atom_angle(mol, neighbors[i], carbon_idx, neighbors[j])
+                for i in range(len(neighbors))
+                for j in range(i + 1, len(neighbors))
+            ]
+
+            assert sum(angles) == pytest.approx(360.0, abs=1e-6)
+            assert all(angle == pytest.approx(120.0, abs=1.0) for angle in angles)
+
+    def test_phen_3d_ligand_atoms_are_in_each_n_metal_n_plane(self):
+        parsed = parse_formula("[Fe(phen)3]2+")
+        mol = build_complex_3d(parsed)
+
+        deviations = _ligand_plane_deviations(mol, donor_symbol="N")
+
+        assert len(deviations) == 3
+        assert all(max(component) < 1e-6 for component in deviations)
+
+    def test_phen_3d_ligands_point_away_from_metal(self):
+        parsed = parse_formula("[Fe(phen)3]2+")
+        mol = build_complex_3d(parsed)
+
+        outward_dots = _ligand_centroid_outward_dots(mol, donor_symbol="N")
+
+        assert len(outward_dots) == 3
+        assert all(dot_value > 0 for dot_value in outward_dots)
+
+    @pytest.mark.parametrize("ligand", ["bipy", "bpy"])
+    def test_bipyridine_3d_ligand_atoms_are_in_each_n_metal_n_plane(self, ligand):
+        parsed = parse_formula(f"[Fe({ligand})3]2+")
+        mol = build_complex_3d(parsed)
+
+        deviations = _ligand_plane_deviations(mol, donor_symbol="N")
+
+        assert len(deviations) == 3
+        assert all(max(component) < 1e-6 for component in deviations)
+
+    @pytest.mark.parametrize("ligand", ["bipy", "bpy"])
+    def test_bipyridine_3d_ligands_point_away_from_metal(self, ligand):
+        parsed = parse_formula(f"[Fe({ligand})3]2+")
+        mol = build_complex_3d(parsed)
+
+        outward_dots = _ligand_centroid_outward_dots(mol, donor_symbol="N")
+
+        assert len(outward_dots) == 3
+        assert all(dot_value > 0 for dot_value in outward_dots)
+
+    @pytest.mark.parametrize("ligand", ["tpy", "terpy"])
+    def test_terpyridine_3d_ligands_are_planar(self, ligand):
+        parsed = parse_formula(f"[Ru({ligand})2]2+")
+        mol = build_complex_3d(parsed)
+
+        deviations = _tridentate_ligand_plane_deviations(mol, donor_symbol="N")
+
+        assert len(deviations) == 2
+        assert all(max(component) < 1e-6 for component in deviations)
+
+    @pytest.mark.parametrize("ligand", ["tpy", "terpy"])
+    def test_terpyridine_3d_ligands_do_not_overlap(self, ligand):
+        parsed = parse_formula(f"[Ru({ligand})2]2+")
+        mol = build_complex_3d(parsed)
+
+        centroids = _ligand_centroids_with_donor_count(
+            mol,
+            donor_symbol="N",
+            donor_count=3,
+        )
+
+        assert len(centroids) == 2
+        assert math.dist(centroids[0], centroids[1]) > 1.5
+
+    @pytest.mark.parametrize("ligand", ["tpy", "terpy"])
+    def test_bis_terpyridine_3d_uses_top_bottom_perpendicular_planes(self, ligand):
+        parsed = parse_formula(f"[Ru({ligand})2]2+")
+        mol = build_complex_3d(parsed)
+
+        summaries = _ligand_axis_summaries_with_donor_count(
+            mol,
+            donor_symbol="N",
+            donor_count=3,
+        )
+
+        assert len(summaries) == 2
+        assert summaries[0]["centroid"][2] > 0
+        assert summaries[1]["centroid"][2] < 0
+        assert summaries[0]["span_y"] == pytest.approx(0.0, abs=1e-6)
+        assert summaries[1]["span_x"] == pytest.approx(0.0, abs=1e-6)
+        assert summaries[0]["span_x"] > 5.0
+        assert summaries[0]["span_z"] > 5.0
+        assert summaries[1]["span_y"] > 5.0
+        assert summaries[1]["span_z"] > 5.0
+
+    @pytest.mark.parametrize("ligand", ["tpy", "terpy"])
+    def test_terpyridine_3d_preserves_uniform_aromatic_ring_lengths(self, ligand):
+        parsed = parse_formula(f"[Ru({ligand})2]2+")
+        mol = build_complex_3d(parsed)
+
+        aromatic_lengths = _aromatic_heavy_bond_lengths(mol)
+        metal_n_lengths = _metal_donor_bond_lengths(mol, donor_symbol="N")
+
+        assert len(aromatic_lengths) == 36
+        assert all(length == pytest.approx(1.39, abs=0.01) for length in aromatic_lengths)
+        assert len(metal_n_lengths) == 6
+        assert sum(1 for length in metal_n_lengths if length > 2.3) == 4
+
     def test_dmso_hard_metal_uses_oxygen_donor(self):
         parsed = parse_formula("[Fe(dmso)6]3+")
         mol = build_complex_3d(parsed)
@@ -223,6 +476,107 @@ class TestBuildComplex:
             for atom in sulfur_donors
         )
 
+    def test_dmso_sulfur_donor_3d_uses_tetrahedral_sulfur(self):
+        parsed = parse_formula("[Pt(dmso)4]2+")
+        mol = build_complex_3d(parsed)
+
+        sulfur_angles = _center_angles_for_symbol(mol, "S")
+        sc_lengths = _bond_lengths_for_symbols(mol, {"S", "C"})
+        so_lengths = _bond_lengths_for_symbols(mol, {"S", "O"})
+
+        assert len(sulfur_angles) == 24
+        assert all(angle == pytest.approx(109.47, abs=0.5) for angle in sulfur_angles)
+        assert len(sc_lengths) == 8
+        assert all(length == pytest.approx(1.79, abs=0.03) for length in sc_lengths)
+        assert len(so_lengths) == 4
+        assert all(length == pytest.approx(1.49, abs=0.03) for length in so_lengths)
+
+    def test_dmso_oxygen_donor_3d_has_bent_metal_oxygen_sulfur_angle(self):
+        parsed = parse_formula("[Fe(dmso)6]3+")
+        mol = build_complex_3d(parsed)
+
+        metal_oxygen_sulfur_angles = _metal_oxygen_sulfur_angles(mol)
+        sulfur_angles = _center_angles_for_symbol(mol, "S")
+
+        assert len(metal_oxygen_sulfur_angles) == 6
+        assert all(
+            angle == pytest.approx(120.0, abs=0.5)
+            for angle in metal_oxygen_sulfur_angles
+        )
+        assert len(sulfur_angles) == 18
+        assert all(angle == pytest.approx(109.47, abs=0.5) for angle in sulfur_angles)
+
+    @pytest.mark.parametrize("ligand", ["SCN", "NCS"])
+    def test_thiocyanato_3d_is_linear_with_realistic_lengths(self, ligand):
+        parsed = parse_formula(f"[Co({ligand})6]")
+        mol = build_complex_3d(parsed)
+
+        carbon_angles = _center_angles_for_symbol(mol, "C")
+        cn_lengths = _bond_lengths_for_symbols(mol, {"C", "N"})
+        cs_lengths = _bond_lengths_for_symbols(mol, {"C", "S"})
+
+        assert len(carbon_angles) == 6
+        assert all(angle == pytest.approx(180.0, abs=0.5) for angle in carbon_angles)
+        assert len(cn_lengths) == 6
+        assert all(length == pytest.approx(1.16, abs=0.03) for length in cn_lengths)
+        assert len(cs_lengths) == 6
+        assert all(length == pytest.approx(1.63, abs=0.03) for length in cs_lengths)
+
+    def test_azido_3d_is_linear_and_points_outward(self):
+        parsed = parse_formula("[Co(N3)6]")
+        mol = build_complex_3d(parsed)
+
+        azide_chains = _metal_bound_linear_chains(mol, donor_symbol="N", chain_symbol="N")
+        nn_lengths = _bond_lengths_for_symbols(mol, {"N"})
+
+        assert sum(1 for atom in mol.GetAtoms() if atom.GetSymbol() == "H") == 0
+        assert len(azide_chains) == 6
+        assert all(len(chain) == 3 for chain in azide_chains)
+        assert all(length == pytest.approx(1.18, abs=0.03) for length in nn_lengths)
+        assert all(
+            dot_value == pytest.approx(1.0, abs=1e-6)
+            for chain in azide_chains
+            for dot_value in _chain_outward_dots(mol, chain)
+        )
+
+    def test_nitro_3d_uses_trigonal_planar_nitrogen(self):
+        parsed = parse_formula("[Co(NO2)6]")
+        mol = build_complex_3d(parsed)
+
+        nitrogen_angles = _center_angles_for_symbol(mol, "N")
+        no_lengths = _bond_lengths_for_symbols(mol, {"N", "O"})
+        ligand_mol = Chem.MolFromSmiles(LIGAND_SMILES["NO2"])
+
+        assert Chem.GetFormalCharge(ligand_mol) == -1
+        assert len(nitrogen_angles) == 18
+        assert all(angle == pytest.approx(120.0, abs=0.5) for angle in nitrogen_angles)
+        assert len(no_lengths) == 12
+        assert all(length == pytest.approx(1.24, abs=0.03) for length in no_lengths)
+
+    def test_nitrito_o_3d_uses_bent_o_binding_and_planar_no2(self):
+        parsed = parse_formula("[Co(ONO)6]")
+        mol = build_complex_3d(parsed)
+
+        nitrogen_angles = _center_angles_for_symbol(mol, "N")
+        metal_oxygen_nitrogen_angles = _metal_oxygen_neighbor_angles(
+            mol,
+            neighbor_symbol="N",
+        )
+        no_lengths = sorted(_bond_lengths_for_symbols(mol, {"N", "O"}))
+        ligand_mol = Chem.MolFromSmiles(LIGAND_SMILES["ONO"])
+
+        assert Chem.GetFormalCharge(ligand_mol) == -1
+        assert len(nitrogen_angles) == 6
+        assert all(angle == pytest.approx(120.0, abs=0.5) for angle in nitrogen_angles)
+        assert len(metal_oxygen_nitrogen_angles) == 6
+        assert all(
+            angle == pytest.approx(120.0, abs=0.5)
+            for angle in metal_oxygen_nitrogen_angles
+        )
+        assert len(no_lengths) == 12
+        assert no_lengths[:6] == pytest.approx([1.22] * 6, abs=0.03)
+        assert no_lengths[6:] == pytest.approx([1.30] * 6, abs=0.03)
+
     def test_hydride_complex_builds_h_donors(self):
         parsed = parse_formula("[FeH6]4-")
         mol = build_complex_3d(parsed)
@@ -239,6 +593,50 @@ class TestBuildComplex:
         assert len(hydride_donors) == 6
         assert all(atom.GetFormalCharge() == -1 for atom in hydride_donors)
 
+    def test_pph3_3d_uses_tetrahedral_phosphorus_and_outward_phenyls(self):
+        parsed = parse_formula("[Pt(PPh3)4]2+")
+        mol = build_complex_3d(parsed)
+
+        p_centered_angles = _phosphorus_substituent_angles(mol)
+        pc_lengths = _bond_lengths_for_symbols(mol, {"P", "C"})
+        aromatic_lengths = _aromatic_heavy_bond_lengths(mol)
+        outward_dots = _phosphorus_carbon_outward_dots(mol)
+
+        assert len(p_centered_angles) == 24
+        assert all(angle == pytest.approx(109.47, abs=0.5) for angle in p_centered_angles)
+        assert len(pc_lengths) == 12
+        assert all(length == pytest.approx(1.83, abs=0.03) for length in pc_lengths)
+        assert len(aromatic_lengths) == 72
+        assert all(length == pytest.approx(1.39, abs=0.01) for length in aromatic_lengths)
+        assert all(dot_value == pytest.approx(1.0 / 3.0, abs=0.01) for dot_value in outward_dots)
+
+    @pytest.mark.parametrize(
+        ("ligand", "expected_angle_count", "expected_cc_count"),
+        [
+            ("PMe3", 144, 0),
+            ("PEt3", 252, 18),
+        ],
+    )
+    def test_trialkylphosphines_3d_use_tetrahedral_p_and_c_geometry(
+        self,
+        ligand,
+        expected_angle_count,
+        expected_cc_count,
+    ):
+        parsed = parse_formula(f"[Co({ligand})6]")
+        mol = build_complex_3d(parsed)
+
+        sp3_angles = _phosphine_sp3_angles(mol)
+        pc_lengths = _bond_lengths_for_symbols(mol, {"P", "C"})
+        cc_lengths = _bond_lengths_for_symbols(mol, {"C"})
+
+        assert len(sp3_angles) == expected_angle_count
+        assert all(angle == pytest.approx(109.47, abs=0.5) for angle in sp3_angles)
+        assert len(pc_lengths) == 18
+        assert all(length == pytest.approx(1.83, abs=0.03) for length in pc_lengths)
+        assert len(cc_lengths) == expected_cc_count
+        assert all(length == pytest.approx(1.53, abs=0.03) for length in cc_lengths)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -251,6 +649,562 @@ def _metal_donor_symbols(mol):
         for bond in metal_atom.GetBonds()
         if bond.GetBondType() == Chem.BondType.DATIVE
     ]
+
+
+def _metal_oxygen_carbon_angles(mol):
+    conf = mol.GetConformer()
+    metal_pos = conf.GetAtomPosition(0)
+    angles = []
+
+    for bond in mol.GetAtomWithIdx(0).GetBonds():
+        donor_idx = bond.GetOtherAtomIdx(0)
+        donor_atom = mol.GetAtomWithIdx(donor_idx)
+        if donor_atom.GetSymbol() != "O":
+            continue
+
+        carbon_idx = next(
+            neighbor.GetIdx()
+            for neighbor in donor_atom.GetNeighbors()
+            if neighbor.GetSymbol() == "C"
+        )
+        donor_pos = conf.GetAtomPosition(donor_idx)
+        carbon_pos = conf.GetAtomPosition(carbon_idx)
+
+        metal_vec = (
+            metal_pos.x - donor_pos.x,
+            metal_pos.y - donor_pos.y,
+            metal_pos.z - donor_pos.z,
+        )
+        carbon_vec = (
+            carbon_pos.x - donor_pos.x,
+            carbon_pos.y - donor_pos.y,
+            carbon_pos.z - donor_pos.z,
+        )
+        numerator = sum(a * b for a, b in zip(metal_vec, carbon_vec))
+        denominator = math.sqrt(sum(a * a for a in metal_vec)) * math.sqrt(
+            sum(a * a for a in carbon_vec)
+        )
+        cos_angle = max(-1.0, min(1.0, numerator / denominator))
+        angles.append(math.degrees(math.acos(cos_angle)))
+
+    return angles
+
+
+def _metal_oxygen_sulfur_angles(mol):
+    return _metal_oxygen_neighbor_angles(mol, neighbor_symbol="S")
+
+
+def _metal_oxygen_neighbor_angles(mol, neighbor_symbol):
+    conf = mol.GetConformer()
+    metal_pos = conf.GetAtomPosition(0)
+    angles = []
+
+    for bond in mol.GetAtomWithIdx(0).GetBonds():
+        donor_idx = bond.GetOtherAtomIdx(0)
+        donor_atom = mol.GetAtomWithIdx(donor_idx)
+        if donor_atom.GetSymbol() != "O":
+            continue
+
+        neighbor_idx = next(
+            neighbor.GetIdx()
+            for neighbor in donor_atom.GetNeighbors()
+            if neighbor.GetSymbol() == neighbor_symbol
+        )
+        donor_pos = conf.GetAtomPosition(donor_idx)
+        neighbor_pos = conf.GetAtomPosition(neighbor_idx)
+
+        metal_vec = (
+            metal_pos.x - donor_pos.x,
+            metal_pos.y - donor_pos.y,
+            metal_pos.z - donor_pos.z,
+        )
+        neighbor_vec = (
+            neighbor_pos.x - donor_pos.x,
+            neighbor_pos.y - donor_pos.y,
+            neighbor_pos.z - donor_pos.z,
+        )
+        numerator = sum(a * b for a, b in zip(metal_vec, neighbor_vec))
+        denominator = math.sqrt(sum(a * a for a in metal_vec)) * math.sqrt(
+            sum(a * a for a in neighbor_vec)
+        )
+        cos_angle = max(-1.0, min(1.0, numerator / denominator))
+        angles.append(math.degrees(math.acos(cos_angle)))
+
+    return angles
+
+
+def _center_angles_for_symbol(mol, symbol):
+    angles = []
+
+    for atom in mol.GetAtoms():
+        if atom.GetIdx() == 0 or atom.GetSymbol() != symbol:
+            continue
+
+        neighbor_indices = [neighbor.GetIdx() for neighbor in atom.GetNeighbors()]
+        if len(neighbor_indices) < 2:
+            continue
+
+        for i in range(len(neighbor_indices)):
+            for j in range(i + 1, len(neighbor_indices)):
+                angles.append(
+                    _atom_angle(
+                        mol,
+                        neighbor_indices[i],
+                        atom.GetIdx(),
+                        neighbor_indices[j],
+                    )
+                )
+
+    return angles
+
+
+def _metal_bound_linear_chains(mol, donor_symbol, chain_symbol):
+    metal_atom = mol.GetAtomWithIdx(0)
+    chains = []
+
+    for bond in metal_atom.GetBonds():
+        donor_idx = bond.GetOtherAtomIdx(0)
+        if mol.GetAtomWithIdx(donor_idx).GetSymbol() != donor_symbol:
+            continue
+
+        chain = [donor_idx]
+        previous_idx = 0
+        current_idx = donor_idx
+        while True:
+            next_idx = next(
+                (
+                    neighbor.GetIdx()
+                    for neighbor in mol.GetAtomWithIdx(current_idx).GetNeighbors()
+                    if neighbor.GetSymbol() == chain_symbol
+                    and neighbor.GetIdx() != previous_idx
+                ),
+                None,
+            )
+            if next_idx is None:
+                break
+
+            chain.append(next_idx)
+            previous_idx, current_idx = current_idx, next_idx
+
+        chains.append(chain)
+
+    return chains
+
+
+def _chain_outward_dots(mol, chain):
+    conf = mol.GetConformer()
+    donor_pos = conf.GetAtomPosition(chain[0])
+    donor_point = (donor_pos.x, donor_pos.y, donor_pos.z)
+    outward = _unit_tuple(donor_point)
+    dots = []
+
+    for begin_idx, end_idx in zip(chain, chain[1:]):
+        begin_pos = conf.GetAtomPosition(begin_idx)
+        end_pos = conf.GetAtomPosition(end_idx)
+        bond_direction = _unit_tuple(
+            (
+                end_pos.x - begin_pos.x,
+                end_pos.y - begin_pos.y,
+                end_pos.z - begin_pos.z,
+            )
+        )
+        dots.append(_dot_tuple(bond_direction, outward))
+
+    return dots
+
+
+def _bond_lengths_for_symbols(mol, symbols):
+    conf = mol.GetConformer()
+    lengths = []
+
+    for bond in mol.GetBonds():
+        begin_idx = bond.GetBeginAtomIdx()
+        end_idx = bond.GetEndAtomIdx()
+        bond_symbols = {
+            mol.GetAtomWithIdx(begin_idx).GetSymbol(),
+            mol.GetAtomWithIdx(end_idx).GetSymbol(),
+        }
+        if bond_symbols != symbols:
+            continue
+
+        begin_pos = conf.GetAtomPosition(begin_idx)
+        end_pos = conf.GetAtomPosition(end_idx)
+        lengths.append(
+            math.dist(
+                (begin_pos.x, begin_pos.y, begin_pos.z),
+                (end_pos.x, end_pos.y, end_pos.z),
+            )
+        )
+
+    return lengths
+
+
+def _bond_lengths_for_symbols_and_type(mol, symbols, bond_type):
+    conf = mol.GetConformer()
+    lengths = []
+
+    for bond in mol.GetBonds():
+        if bond.GetBondType() != bond_type:
+            continue
+
+        begin_idx = bond.GetBeginAtomIdx()
+        end_idx = bond.GetEndAtomIdx()
+        bond_symbols = {
+            mol.GetAtomWithIdx(begin_idx).GetSymbol(),
+            mol.GetAtomWithIdx(end_idx).GetSymbol(),
+        }
+        if bond_symbols != symbols:
+            continue
+
+        begin_pos = conf.GetAtomPosition(begin_idx)
+        end_pos = conf.GetAtomPosition(end_idx)
+        lengths.append(
+            math.dist(
+                (begin_pos.x, begin_pos.y, begin_pos.z),
+                (end_pos.x, end_pos.y, end_pos.z),
+            )
+        )
+
+    return lengths
+
+
+def _aromatic_heavy_bond_lengths(mol):
+    conf = mol.GetConformer()
+    lengths = []
+
+    for bond in mol.GetBonds():
+        if not bond.GetIsAromatic():
+            continue
+
+        begin_idx = bond.GetBeginAtomIdx()
+        end_idx = bond.GetEndAtomIdx()
+        if "H" in {
+            mol.GetAtomWithIdx(begin_idx).GetSymbol(),
+            mol.GetAtomWithIdx(end_idx).GetSymbol(),
+        }:
+            continue
+
+        begin_pos = conf.GetAtomPosition(begin_idx)
+        end_pos = conf.GetAtomPosition(end_idx)
+        lengths.append(
+            math.dist(
+                (begin_pos.x, begin_pos.y, begin_pos.z),
+                (end_pos.x, end_pos.y, end_pos.z),
+            )
+        )
+
+    return lengths
+
+
+def _metal_donor_bond_lengths(mol, donor_symbol):
+    conf = mol.GetConformer()
+    metal_pos = conf.GetAtomPosition(0)
+    lengths = []
+
+    for bond in mol.GetAtomWithIdx(0).GetBonds():
+        donor_idx = bond.GetOtherAtomIdx(0)
+        if mol.GetAtomWithIdx(donor_idx).GetSymbol() != donor_symbol:
+            continue
+
+        donor_pos = conf.GetAtomPosition(donor_idx)
+        lengths.append(
+            math.dist(
+                (metal_pos.x, metal_pos.y, metal_pos.z),
+                (donor_pos.x, donor_pos.y, donor_pos.z),
+            )
+        )
+
+    return lengths
+
+
+def _phosphorus_substituent_angles(mol):
+    angles = []
+
+    for atom in mol.GetAtoms():
+        if atom.GetSymbol() != "P":
+            continue
+
+        neighbor_indices = [
+            neighbor.GetIdx()
+            for neighbor in atom.GetNeighbors()
+            if neighbor.GetSymbol() in {"C", mol.GetAtomWithIdx(0).GetSymbol()}
+        ]
+        for i in range(len(neighbor_indices)):
+            for j in range(i + 1, len(neighbor_indices)):
+                angles.append(
+                    _atom_angle(
+                        mol,
+                        neighbor_indices[i],
+                        atom.GetIdx(),
+                        neighbor_indices[j],
+                    )
+                )
+
+    return angles
+
+
+def _phosphorus_carbon_outward_dots(mol):
+    conf = mol.GetConformer()
+    metal_pos = conf.GetAtomPosition(0)
+    metal = (metal_pos.x, metal_pos.y, metal_pos.z)
+    dots = []
+
+    for atom in mol.GetAtoms():
+        if atom.GetSymbol() != "P":
+            continue
+
+        p_pos = conf.GetAtomPosition(atom.GetIdx())
+        p_point = (p_pos.x, p_pos.y, p_pos.z)
+        outward = _unit_tuple(_sub_tuple(p_point, metal))
+
+        for neighbor in atom.GetNeighbors():
+            if neighbor.GetSymbol() != "C":
+                continue
+
+            c_pos = conf.GetAtomPosition(neighbor.GetIdx())
+            pc_vector = _unit_tuple(
+                _sub_tuple((c_pos.x, c_pos.y, c_pos.z), p_point)
+            )
+            dots.append(_dot_tuple(pc_vector, outward))
+
+    return dots
+
+
+def _phosphine_sp3_angles(mol):
+    angles = []
+
+    for atom in mol.GetAtoms():
+        if atom.GetIdx() == 0 or atom.GetSymbol() not in {"P", "C"}:
+            continue
+
+        neighbor_indices = [neighbor.GetIdx() for neighbor in atom.GetNeighbors()]
+        if len(neighbor_indices) < 2:
+            continue
+
+        for i in range(len(neighbor_indices)):
+            for j in range(i + 1, len(neighbor_indices)):
+                angles.append(
+                    _atom_angle(
+                        mol,
+                        neighbor_indices[i],
+                        atom.GetIdx(),
+                        neighbor_indices[j],
+                    )
+                )
+
+    return angles
+
+
+def _atom_angle(mol, begin_idx, center_idx, end_idx):
+    conf = mol.GetConformer()
+    begin_pos = conf.GetAtomPosition(begin_idx)
+    center_pos = conf.GetAtomPosition(center_idx)
+    end_pos = conf.GetAtomPosition(end_idx)
+
+    begin_vec = (
+        begin_pos.x - center_pos.x,
+        begin_pos.y - center_pos.y,
+        begin_pos.z - center_pos.z,
+    )
+    end_vec = (
+        end_pos.x - center_pos.x,
+        end_pos.y - center_pos.y,
+        end_pos.z - center_pos.z,
+    )
+    numerator = sum(a * b for a, b in zip(begin_vec, end_vec))
+    denominator = math.sqrt(sum(a * a for a in begin_vec)) * math.sqrt(
+        sum(a * a for a in end_vec)
+    )
+    cos_angle = max(-1.0, min(1.0, numerator / denominator))
+    return math.degrees(math.acos(cos_angle))
+
+
+def _ligand_plane_deviations(mol, donor_symbol):
+    conf = mol.GetConformer()
+    metal_pos = conf.GetAtomPosition(0)
+    metal = (metal_pos.x, metal_pos.y, metal_pos.z)
+
+    deviations = []
+    for component, donor_indices in _components_with_two_donors(mol, donor_symbol):
+        donor_positions = []
+        for donor_idx in donor_indices:
+            pos = conf.GetAtomPosition(donor_idx)
+            donor_positions.append((pos.x, pos.y, pos.z))
+
+        normal = _unit_tuple(
+            _cross_tuple(
+                _sub_tuple(donor_positions[0], metal),
+                _sub_tuple(donor_positions[1], metal),
+            )
+        )
+        component_deviations = []
+        for idx in component:
+            pos = conf.GetAtomPosition(idx)
+            point = (pos.x, pos.y, pos.z)
+            component_deviations.append(abs(_dot_tuple(_sub_tuple(point, metal), normal)))
+        deviations.append(component_deviations)
+
+    return deviations
+
+
+def _ligand_centroid_outward_dots(mol, donor_symbol):
+    conf = mol.GetConformer()
+    dots = []
+
+    for component, donor_indices in _components_with_two_donors(mol, donor_symbol):
+        donor_positions = []
+        for donor_idx in donor_indices:
+            pos = conf.GetAtomPosition(donor_idx)
+            donor_positions.append((pos.x, pos.y, pos.z))
+        donor_mid = (
+            sum(pos[0] for pos in donor_positions) / 2,
+            sum(pos[1] for pos in donor_positions) / 2,
+            sum(pos[2] for pos in donor_positions) / 2,
+        )
+
+        centroid = (
+            sum(conf.GetAtomPosition(idx).x for idx in component) / len(component),
+            sum(conf.GetAtomPosition(idx).y for idx in component) / len(component),
+            sum(conf.GetAtomPosition(idx).z for idx in component) / len(component),
+        )
+        dots.append(_dot_tuple(_sub_tuple(centroid, donor_mid), donor_mid))
+
+    return dots
+
+
+def _tridentate_ligand_plane_deviations(mol, donor_symbol):
+    conf = mol.GetConformer()
+    deviations = []
+
+    for component, donor_indices in _components_with_donor_count(mol, donor_symbol, 3):
+        donor_positions = []
+        for donor_idx in donor_indices:
+            pos = conf.GetAtomPosition(donor_idx)
+            donor_positions.append((pos.x, pos.y, pos.z))
+
+        normal = _unit_tuple(
+            _cross_tuple(
+                _sub_tuple(donor_positions[1], donor_positions[0]),
+                _sub_tuple(donor_positions[2], donor_positions[0]),
+            )
+        )
+        component_deviations = []
+        for idx in component:
+            pos = conf.GetAtomPosition(idx)
+            point = (pos.x, pos.y, pos.z)
+            component_deviations.append(
+                abs(_dot_tuple(_sub_tuple(point, donor_positions[0]), normal))
+            )
+        deviations.append(component_deviations)
+
+    return deviations
+
+
+def _ligand_centroids_with_donor_count(mol, donor_symbol, donor_count):
+    conf = mol.GetConformer()
+    centroids = []
+
+    for component, _ in _components_with_donor_count(mol, donor_symbol, donor_count):
+        centroids.append(
+            (
+                sum(conf.GetAtomPosition(idx).x for idx in component) / len(component),
+                sum(conf.GetAtomPosition(idx).y for idx in component) / len(component),
+                sum(conf.GetAtomPosition(idx).z for idx in component) / len(component),
+            )
+        )
+
+    return centroids
+
+
+def _ligand_axis_summaries_with_donor_count(mol, donor_symbol, donor_count):
+    conf = mol.GetConformer()
+    summaries = []
+
+    for component, _ in _components_with_donor_count(mol, donor_symbol, donor_count):
+        points = [conf.GetAtomPosition(idx) for idx in component]
+        xs = [point.x for point in points]
+        ys = [point.y for point in points]
+        zs = [point.z for point in points]
+        summaries.append(
+            {
+                "centroid": (
+                    sum(xs) / len(xs),
+                    sum(ys) / len(ys),
+                    sum(zs) / len(zs),
+                ),
+                "span_x": max(xs) - min(xs),
+                "span_y": max(ys) - min(ys),
+                "span_z": max(zs) - min(zs),
+            }
+        )
+
+    return summaries
+
+
+def _components_with_two_donors(mol, donor_symbol):
+    yield from _components_with_donor_count(mol, donor_symbol, 2)
+
+
+def _components_with_donor_count(mol, donor_symbol, donor_count):
+    adjacency = {idx: set() for idx in range(mol.GetNumAtoms()) if idx != 0}
+    for bond in mol.GetBonds():
+        begin_idx = bond.GetBeginAtomIdx()
+        end_idx = bond.GetEndAtomIdx()
+        if 0 in {begin_idx, end_idx}:
+            continue
+        adjacency[begin_idx].add(end_idx)
+        adjacency[end_idx].add(begin_idx)
+
+    components = []
+    seen = set()
+    for start in adjacency:
+        if start in seen:
+            continue
+        stack = [start]
+        component = []
+        seen.add(start)
+        while stack:
+            idx = stack.pop()
+            component.append(idx)
+            for neighbor in adjacency[idx]:
+                if neighbor not in seen:
+                    seen.add(neighbor)
+                    stack.append(neighbor)
+        components.append(component)
+
+    metal_atom = mol.GetAtomWithIdx(0)
+    for component in components:
+        donor_indices = [
+            bond.GetOtherAtomIdx(0)
+            for bond in metal_atom.GetBonds()
+            if bond.GetOtherAtomIdx(0) in component
+            and mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0)).GetSymbol() == donor_symbol
+        ]
+        if len(donor_indices) != donor_count:
+            continue
+
+        yield component, donor_indices
+
+
+def _sub_tuple(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _dot_tuple(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _cross_tuple(a, b):
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def _unit_tuple(v):
+    length = math.sqrt(sum(component * component for component in v))
+    return tuple(component / length for component in v)
 
 
 def pytest_approx(value, rel=1e-6, abs_=1e-6):

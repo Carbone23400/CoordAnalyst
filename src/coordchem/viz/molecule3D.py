@@ -2,7 +2,7 @@
 from typing import Iterable, Optional, Sequence, Tuple
 import math
 from rdkit import Chem
-from rdkit.Chem import AllChem
+from rdkit.Chem import AllChem, rdDepictor
 
 from coordchem.parser import ParsedComplex, parse_formula, KNOWN_LIGANDS
 from coordchem.viz.ligand_data import (
@@ -579,7 +579,6 @@ def thiocyanato_ligand_positions(ligand_mol, donor_idx,target,ligand_symbol):
     else:
         ref = (0.0, 1.0, 0.0)
 
-    u = unit(cross(direction, ref))
     n_indices = [
         atom.GetIdx()
         for atom in ligand_mol.GetAtoms()
@@ -592,33 +591,32 @@ def thiocyanato_ligand_positions(ligand_mol, donor_idx,target,ligand_symbol):
         atom.GetIdx()
         for atom in ligand_mol.GetAtoms()
         if atom.GetSymbol() == "C"] 
-    
+
+    cn_length = 1.16
+    cs_length = 1.63
+
     if ligand_symbol=="NCS":
         n_idx=donor_idx
         coords[n_idx]=target
-        outward=vec_scale(direction,0.8)
-        side=vec_scale(u,0.7)
 
         c_idx=c_indices[0]
-        c_pos=vec_add(target,vec_scale(direction,1.2))
+        c_pos=vec_add(target,vec_scale(direction,cn_length))
         coords[c_idx]=c_pos
             
         s_idx=s_indices[0]
-        s_pos=vec_add(c_pos,vec_scale(direction,1.6))
+        s_pos=vec_add(c_pos,vec_scale(direction,cs_length))
         coords[s_idx]=s_pos
 
     elif ligand_symbol=="SCN":
         s_idx=donor_idx
         coords[s_idx]=target
-        outward=vec_scale(direction,0.8)
-        side=vec_scale(u,0.7)
 
         c_idx=c_indices[0]
-        c_pos=vec_add(target,vec_scale(direction,1.6))
+        c_pos=vec_add(target,vec_scale(direction,cs_length))
         coords[c_idx]=c_pos
             
         n_idx=n_indices[0]
-        n_pos=vec_add(target,vec_scale(direction,1.2))
+        n_pos=vec_add(c_pos,vec_scale(direction,cn_length))
         coords[n_idx]=n_pos
 
     for atom in ligand_mol.GetAtoms():
@@ -626,13 +624,47 @@ def thiocyanato_ligand_positions(ligand_mol, donor_idx,target,ligand_symbol):
         if idx not in coords:
             coords[idx]=target
     return coords
+
+
+def azido_ligand_positions(ligand_mol, donor_idx, target):
+    """Place azide as a linear M-N-N-N ligand pointing away from the metal."""
+    direction = unit(target)
+    coords = {donor_idx: target}
+
+    nn_length = 1.18
+    current_idx = donor_idx
+    current_pos = target
+    seen = {donor_idx}
+
+    while True:
+        next_n = next(
+            (
+                neighbor.GetIdx()
+                for neighbor in ligand_mol.GetAtomWithIdx(current_idx).GetNeighbors()
+                if neighbor.GetSymbol() == "N" and neighbor.GetIdx() not in seen
+            ),
+            None,
+        )
+        if next_n is None:
+            break
+
+        current_pos = vec_add(current_pos, vec_scale(direction, nn_length))
+        coords[next_n] = current_pos
+        seen.add(next_n)
+        current_idx = next_n
+
+    for atom in ligand_mol.GetAtoms():
+        idx = atom.GetIdx()
+        if idx not in coords:
+            coords[idx] = target
+
+    return coords
+
     
 def nitrito_ligand_positions(ligand_mol, donor_idx, target, ligand_symbol):
     direction = unit(target)
 
-    center = target
-    coords = {}
-    coords[donor_idx] = center
+    coords = {donor_idx: target}
 
     if abs(direction[0]) < 0.9:
         ref = (1.0, 0.0, 0.0)
@@ -640,6 +672,10 @@ def nitrito_ligand_positions(ligand_mol, donor_idx, target, ligand_symbol):
         ref = (0.0, 1.0, 0.0)
 
     u = unit(cross(direction, ref))
+    no_single_length = 1.30
+    no_double_length = 1.22
+    no_resonance_length = 1.24
+
     n_indices = [
         atom.GetIdx()
         for atom in ligand_mol.GetAtoms()
@@ -651,24 +687,37 @@ def nitrito_ligand_positions(ligand_mol, donor_idx, target, ligand_symbol):
     if ligand_symbol=="NO2":
         n_idx=donor_idx
         coords[n_idx]=target
-        outward=vec_scale(direction,0.8)
-        side=vec_scale(u,0.7)
 
         if len(o_indices)>=2:
-            coords[o_indices[0]]=vec_add(target,vec_add(outward,side))
-            coords[o_indices[1]]=vec_add(target,vec_sub(outward,side))
+            side_component = (3.0 ** 0.5) / 2.0
+            o_dir_1 = vec_add(
+                vec_scale(direction, 0.5),
+                vec_scale(u, side_component),
+            )
+            o_dir_2 = vec_add(
+                vec_scale(direction, 0.5),
+                vec_scale(u, -side_component),
+            )
+            coords[o_indices[0]]=vec_add(target,vec_scale(o_dir_1, no_resonance_length))
+            coords[o_indices[1]]=vec_add(target,vec_scale(o_dir_2, no_resonance_length))
 
     elif ligand_symbol=="ONO":
         o_idx=donor_idx
         coords[o_idx]=target
-        outward=vec_scale(direction,0.8)
-        side=vec_scale(u,0.7)
 
-        coords[n_indices[0]]=vec_add(target,vec_add(outward,side))  
+        n_direction = unit(
+            vec_add(
+                vec_scale(direction, 0.5),
+                vec_scale(u, (3.0 ** 0.5) / 2.0),
+            )
+        )
+        coords[n_indices[0]]=vec_add(target,vec_scale(n_direction, no_single_length))
         other_o=[idx for idx in o_indices if idx!=donor_idx]
         if other_o:
-            o_pos=vec_add(coords[n_indices[0]],vec_add(vec_scale(direction,0.8),vec_scale(u,0.7),),)
-            coords[other_o[0]]=o_pos
+            coords[other_o[0]]=vec_add(
+                coords[n_indices[0]],
+                vec_scale(direction, no_double_length),
+            )
     for atom in ligand_mol.GetAtoms():
         idx= atom.GetIdx()
         if idx not in coords:
@@ -813,10 +862,100 @@ def pyridine_ligand_positions(ligand_mol, donor_idx_local,target,ligand_number=0
 
 
 
+def _tetrahedral_substituent_directions(direction, u, v):
+    tetrahedral_radial = (8.0 / 9.0) ** 0.5
+    directions = []
+    for i in range(3):
+        angle = 2 * math.pi * i / 3
+        radial = vec_add(
+            vec_scale(u, math.cos(angle)),
+            vec_scale(v, math.sin(angle)),
+        )
+        directions.append(
+            unit(
+                vec_add(
+                    vec_scale(direction, 1.0 / 3.0),
+                    vec_scale(radial, tetrahedral_radial),
+                )
+            )
+        )
+    return directions
+
+
+def _perpendicular_unit(reference, preferred):
+    side = vec_sub(preferred, vec_scale(reference, dot(preferred, reference)))
+    if norm(side) > 1e-8:
+        return unit(side)
+    side = cross(reference, (1.0, 0.0, 0.0))
+    if norm(side) > 1e-8:
+        return unit(side)
+    return unit(cross(reference, (0.0, 1.0, 0.0)))
+
+
+def _place_methyl_hydrogens(coords, ligand_mol, carbon_idx, heavy_idx, side_reference):
+    carbon_pos = coords[carbon_idx]
+    heavy_direction = unit(vec_sub(coords[heavy_idx], carbon_pos))
+    side = _perpendicular_unit(heavy_direction, side_reference)
+    lift = unit(cross(heavy_direction, side))
+    ch_length = 1.09
+
+    h_indices = [
+        neighbor.GetIdx()
+        for neighbor in ligand_mol.GetAtomWithIdx(carbon_idx).GetNeighbors()
+        if neighbor.GetSymbol() == "H"
+    ]
+    for i, h_idx in enumerate(h_indices):
+        angle = 2 * math.pi * i / max(1, len(h_indices))
+        h_direction = vec_add(
+            vec_scale(heavy_direction, -1.0 / 3.0),
+            vec_scale(
+                vec_add(
+                    vec_scale(side, math.cos(angle)),
+                    vec_scale(lift, math.sin(angle)),
+                ),
+                (8.0 / 9.0) ** 0.5,
+            ),
+        )
+        coords[h_idx] = vec_add(carbon_pos, vec_scale(unit(h_direction), ch_length))
+
+
+def _place_methylene_hydrogens(coords, ligand_mol, carbon_idx, heavy_indices):
+    carbon_pos = coords[carbon_idx]
+    heavy_dirs = [unit(vec_sub(coords[idx], carbon_pos)) for idx in heavy_indices]
+    if len(heavy_dirs) < 2:
+        return
+
+    bisector = unit(vec_scale(vec_add(heavy_dirs[0], heavy_dirs[1]), -1.0))
+    normal = cross(heavy_dirs[0], heavy_dirs[1])
+    if norm(normal) <= 1e-8:
+        normal = _perpendicular_unit(bisector, (0.0, 0.0, 1.0))
+    normal = unit(normal)
+    ch_length = 1.09
+
+    h_indices = [
+        neighbor.GetIdx()
+        for neighbor in ligand_mol.GetAtomWithIdx(carbon_idx).GetNeighbors()
+        if neighbor.GetSymbol() == "H"
+    ]
+    h_dirs = (
+        vec_add(
+            vec_scale(bisector, 1.0 / (3.0 ** 0.5)),
+            vec_scale(normal, (2.0 / 3.0) ** 0.5),
+        ),
+        vec_add(
+            vec_scale(bisector, 1.0 / (3.0 ** 0.5)),
+            vec_scale(normal, -(2.0 / 3.0) ** 0.5),
+        ),
+    )
+    for h_idx, h_direction in zip(h_indices, h_dirs):
+        coords[h_idx] = vec_add(carbon_pos, vec_scale(unit(h_direction), ch_length))
+
+
 def trimethyl_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, spread=0.8):
     direction = unit(target)
 
-    center = target
+    metal_p_length = max(norm(target), 4.0)
+    center = vec_scale(direction, metal_p_length)
     coords = {}
     coords[donor_idx] = center
 
@@ -828,43 +967,18 @@ def trimethyl_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, s
     u = unit(cross(direction, ref))
     v = unit(cross(direction, u))
 
+    p_atom = ligand_mol.GetAtomWithIdx(donor_idx)
     methyl_indices = [
-        atom.GetIdx()
-        for atom in ligand_mol.GetAtoms()
-        if atom.GetSymbol() == "C"
+        neighbor.GetIdx()
+        for neighbor in p_atom.GetNeighbors()
+        if neighbor.GetSymbol() == "C"
     ]
 
-
-
-    for i, c_idx in enumerate(methyl_indices[:3]):
-        angle = 2 * math.pi * i / 3
-
-        radial = vec_add(
-            vec_scale(u, math.cos(angle) * spread),
-            vec_scale(v, math.sin(angle) * spread),
-        )
-
-        outward = vec_scale(direction, 0.8)
-
-        ch3_pos = vec_add(center, vec_add(radial, outward))
-        coords[c_idx] = ch3_pos
-        carbon_atom=ligand_mol.GetAtomWithIdx(c_idx)
-        h_neighbors= [neighbor.GetIdx() for neighbor in carbon_atom.GetNeighbors() if neighbor.GetSymbol() == "H"]
-        for j, h_idx in enumerate(h_neighbors):
-            h_angle = angle + 2 * math.pi * j / 3
-
-            h_radial = vec_add(
-        vec_scale(u, math.cos(h_angle) * 0.45),
-        vec_scale(v, math.sin(h_angle) * 0.45),
-    )
-
-            h_outward = vec_scale(direction, 0.35)
-
-            coords[h_idx] = vec_add(
-        ch3_pos,
-        vec_add(h_radial, h_outward),
-    )
-
+    pc_length = 1.83
+    substituent_directions = _tetrahedral_substituent_directions(direction, u, v)
+    for c_idx, pc_direction in zip(methyl_indices[:3], substituent_directions):
+        coords[c_idx] = vec_add(center, vec_scale(pc_direction, pc_length))
+        _place_methyl_hydrogens(coords, ligand_mol, c_idx, donor_idx, direction)
 
     for atom in ligand_mol.GetAtoms():
         idx = atom.GetIdx()
@@ -872,7 +986,138 @@ def trimethyl_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, s
             coords[idx] = center
 
     return coords
+
+
+def triphenylphosphine_ligand_positions(ligand_mol, donor_idx, target):
+    """Place PPh3 with tetrahedral phosphorus and outward phenyl rings."""
+    direction = unit(target)
+    metal_p_length = max(norm(target), 4.0)
+    center = vec_scale(direction, metal_p_length)
+    coords = {donor_idx: center}
+
+    if abs(direction[0]) < 0.9:
+        ref = (1.0, 0.0, 0.0)
+    else:
+        ref = (0.0, 1.0, 0.0)
+
+    u = unit(cross(direction, ref))
+    v = unit(cross(direction, u))
+
+    p_atom = ligand_mol.GetAtomWithIdx(donor_idx)
+    ipso_carbons = [
+        neighbor.GetIdx()
+        for neighbor in p_atom.GetNeighbors()
+        if neighbor.GetSymbol() == "C"
+    ]
+
+    pc_length = 1.83
+    aromatic_cc_length = 1.39
+    ch_length = 1.09
+    tetrahedral_radial = (8.0 / 9.0) ** 0.5
+
+    ring_info = ligand_mol.GetRingInfo()
+    rings_by_ipso = {}
+    for ring in ring_info.AtomRings():
+        ring_set = set(ring)
+        for ipso_idx in ipso_carbons:
+            if ipso_idx in ring_set:
+                rings_by_ipso[ipso_idx] = ring
+                break
+
+    for i, ipso_idx in enumerate(ipso_carbons[:3]):
+        angle = 2 * math.pi * i / 3
+        radial = vec_add(
+            vec_scale(u, math.cos(angle)),
+            vec_scale(v, math.sin(angle)),
+        )
+        pc_direction = unit(
+            vec_add(
+                vec_scale(direction, 1.0 / 3.0),
+                vec_scale(radial, tetrahedral_radial),
+            )
+        )
+
+        ipso_pos = vec_add(center, vec_scale(pc_direction, pc_length))
+        coords[ipso_idx] = ipso_pos
+
+        ring = rings_by_ipso.get(ipso_idx)
+        if ring is None:
+            continue
+
+        ring_side = cross(pc_direction, direction)
+        if norm(ring_side) <= 1e-8:
+            ring_side = cross(pc_direction, u)
+        ring_side = unit(ring_side)
+
+        ordered_ring = _ordered_ring_from_anchor(ligand_mol, ring, ipso_idx)
+        ring_center = vec_add(ipso_pos, vec_scale(pc_direction, aromatic_cc_length))
+        center_to_ipso = vec_scale(pc_direction, -1.0)
+
+        for ring_pos_index, atom_idx in enumerate(ordered_ring):
+            theta = ring_pos_index * math.pi / 3
+            atom_direction = vec_add(
+                vec_scale(center_to_ipso, math.cos(theta)),
+                vec_scale(ring_side, math.sin(theta)),
+            )
+            coords[atom_idx] = vec_add(
+                ring_center,
+                vec_scale(atom_direction, aromatic_cc_length),
+            )
+
+        for atom_idx in ordered_ring:
+            atom = ligand_mol.GetAtomWithIdx(atom_idx)
+            h_neighbors = [
+                neighbor.GetIdx()
+                for neighbor in atom.GetNeighbors()
+                if neighbor.GetSymbol() == "H"
+            ]
+            if not h_neighbors:
+                continue
+
+            atom_pos = coords[atom_idx]
+            h_direction = unit(vec_sub(atom_pos, ring_center))
+            for h_idx in h_neighbors:
+                coords[h_idx] = vec_add(atom_pos, vec_scale(h_direction, ch_length))
+
+    for atom in ligand_mol.GetAtoms():
+        idx = atom.GetIdx()
+        if idx not in coords:
+            coords[idx] = center
+
+    return coords
+
+
+def _ordered_ring_from_anchor(ligand_mol, ring, anchor_idx):
+    ring_set = set(ring)
+    ring_neighbors = [
+        neighbor.GetIdx()
+        for neighbor in ligand_mol.GetAtomWithIdx(anchor_idx).GetNeighbors()
+        if neighbor.GetIdx() in ring_set
+    ]
+    if not ring_neighbors:
+        return [anchor_idx] + [idx for idx in ring if idx != anchor_idx]
+
+    ordered = [anchor_idx]
+    previous_idx = anchor_idx
+    current_idx = ring_neighbors[0]
+    while len(ordered) < len(ring):
+        ordered.append(current_idx)
+        next_neighbors = [
+            neighbor.GetIdx()
+            for neighbor in ligand_mol.GetAtomWithIdx(current_idx).GetNeighbors()
+            if neighbor.GetIdx() in ring_set and neighbor.GetIdx() != previous_idx
+        ]
+        if not next_neighbors:
+            break
+        previous_idx, current_idx = current_idx, next_neighbors[0]
+
+    if len(ordered) != len(ring):
+        ordered = [anchor_idx] + [idx for idx in ring if idx != anchor_idx]
+    return ordered
+
+
 def oxalate_ligand_positions(ligand_mol, donor_indices, target_sites):
+    """Place oxalate as a planar O-C(=O)-C(=O)-O chelate."""
     coords={}
     o1_idx, o2_idx = donor_indices[:2]
     o1_pos, o2_pos = target_sites
@@ -889,6 +1134,10 @@ def oxalate_ligand_positions(ligand_mol, donor_indices, target_sites):
 
     if norm(outward) == 0:
         outward = (0.0, 0.0, 1.0)
+    outward = vec_sub(outward, vec_scale(axis, dot(outward, axis)))
+    if norm(outward) == 0:
+        outward = (0.0, 0.0, 1.0)
+    outward = unit(outward)
 
     side = cross(axis, outward)
 
@@ -913,9 +1162,51 @@ def oxalate_ligand_positions(ligand_mol, donor_indices, target_sites):
     c1_idx = c1_candidates[0]
     c2_idx = c2_candidates[0]
 
-    if c1_candidates and c2_candidates:
-        coords[c1_idx] = vec_add(o1_pos,vec_add(vec_scale(axis,0.45),vec_scale(outward,0.7)))
-        coords[c2_idx] = vec_add(o2_pos,vec_add(vec_scale(axis,-0.45),vec_scale(outward,0.7)))
+    donor_co_length = 1.27
+    carbonyl_length = 1.22
+    cc_length = 1.54
+    donor_distance = norm(vec_sub(o2_pos, o1_pos))
+    axis_shift = max(
+        0.0,
+        min(donor_co_length * 0.95, (donor_distance - cc_length) / 2.0),
+    )
+    outward_shift = (donor_co_length**2 - axis_shift**2) ** 0.5
+
+    coords[c1_idx] = vec_add(
+        o1_pos,
+        vec_add(vec_scale(axis, axis_shift), vec_scale(outward, outward_shift)),
+    )
+    coords[c2_idx] = vec_add(
+        o2_pos,
+        vec_add(vec_scale(axis, -axis_shift), vec_scale(outward, outward_shift)),
+    )
+
+    carbonyl_1 = [
+        nbr.GetIdx()
+        for nbr in ligand_mol.GetAtomWithIdx(c1_idx).GetNeighbors()
+        if nbr.GetSymbol() == "O" and nbr.GetIdx() != o1_idx
+    ]
+    carbonyl_2 = [
+        nbr.GetIdx()
+        for nbr in ligand_mol.GetAtomWithIdx(c2_idx).GetNeighbors()
+        if nbr.GetSymbol() == "O" and nbr.GetIdx() != o2_idx
+    ]
+    if carbonyl_1:
+        donor_direction = unit(vec_sub(o1_pos, coords[c1_idx]))
+        cc_direction = unit(vec_sub(coords[c2_idx], coords[c1_idx]))
+        carbonyl_direction = unit(vec_scale(vec_add(donor_direction, cc_direction), -1.0))
+        coords[carbonyl_1[0]] = vec_add(
+            coords[c1_idx],
+            vec_scale(carbonyl_direction, carbonyl_length),
+        )
+    if carbonyl_2:
+        donor_direction = unit(vec_sub(o2_pos, coords[c2_idx]))
+        cc_direction = unit(vec_sub(coords[c1_idx], coords[c2_idx]))
+        carbonyl_direction = unit(vec_scale(vec_add(donor_direction, cc_direction), -1.0))
+        coords[carbonyl_2[0]] = vec_add(
+            coords[c2_idx],
+            vec_scale(carbonyl_direction, carbonyl_length),
+        )
 
     for atom in ligand_mol.GetAtoms():
         idx = atom.GetIdx()
@@ -923,29 +1214,182 @@ def oxalate_ligand_positions(ligand_mol, donor_indices, target_sites):
         if idx in coords:
             continue
 
-        if atom.GetSymbol() == "O":
-            neighbors = atom.GetNeighbors()
-            if neighbors:
-                c_idx = neighbors[0].GetIdx()
-                base=coords.get(c_idx,mid)
-                local_out = unit(vec_sub(base, mid))
-
-                if norm(local_out) == 0:
-                    local_out = outward
-
-                coords[idx] = vec_add(
-                    base,
-                    vec_add(
-                        vec_scale(local_out, 0.35),
-                        vec_scale(side, 0.25 if idx % 2 == 0 else -0.25),
-                    ),
-                )
-            else:
-                coords[idx] = mid
-        else:
-            coords[idx] = mid
+        coords[idx] = mid
 
     return coords
+
+
+def acac_ligand_positions(ligand_mol, donor_indices, target_sites):
+    """Place acetylacetonate with sp2 planar and sp3 tetrahedral geometry."""
+    coords = {}
+    o1_idx, o2_idx = donor_indices[:2]
+    o1_pos, o2_pos = target_sites
+
+    coords[o1_idx] = o1_pos
+    coords[o2_idx] = o2_pos
+
+    o1_atom = ligand_mol.GetAtomWithIdx(o1_idx)
+    o2_atom = ligand_mol.GetAtomWithIdx(o2_idx)
+    c1_idx = next(n.GetIdx() for n in o1_atom.GetNeighbors() if n.GetSymbol() == "C")
+    c2_idx = next(n.GetIdx() for n in o2_atom.GetNeighbors() if n.GetSymbol() == "C")
+
+    def perpendicular_unit(reference, preferred):
+        side = vec_sub(preferred, vec_scale(reference, dot(preferred, reference)))
+        if norm(side) > 1e-8:
+            return unit(side)
+        side = cross(reference, (1.0, 0.0, 0.0))
+        if norm(side) > 1e-8:
+            return unit(side)
+        return unit(cross(reference, (0.0, 1.0, 0.0)))
+
+    ligand_mid = (
+        (o1_pos[0] + o2_pos[0]) / 2,
+        (o1_pos[1] + o2_pos[1]) / 2,
+        (o1_pos[2] + o2_pos[2]) / 2,
+    )
+    outward = unit(ligand_mid)
+    if norm(outward) <= 1e-8:
+        outward = unit(vec_add(o1_pos, o2_pos))
+    axis = unit(vec_sub(o2_pos, o1_pos))
+    o_o_distance = norm(vec_sub(o2_pos, o1_pos))
+    half_o_o = o_o_distance / 2.0
+
+    oc_length = 1.28
+    cc_sp2_length = 1.40
+    c_methyl_length = 1.50
+    ch_length = 1.09
+
+    # Planar beta-diketonate backbone: O-C-C-C-O.
+    # The central sp2 carbon sits at the apex of a trigonal-planar C-C-C angle.
+    bridge_half_angle_drop = cc_sp2_length / 2.0
+    donor_c_axis = (3.0 ** 0.5 / 2.0) * cc_sp2_length
+    donor_c_axis = min(donor_c_axis, max(0.05, half_o_o - 0.05))
+    oc_axis_component = half_o_o - donor_c_axis
+    if abs(oc_axis_component) > oc_length:
+        oc_axis_component = max(-oc_length * 0.95, min(oc_length * 0.95, oc_axis_component))
+    donor_c_out = (oc_length**2 - oc_axis_component**2) ** 0.5
+
+    c1_pos = vec_add(
+        o1_pos,
+        vec_add(vec_scale(axis, oc_axis_component), vec_scale(outward, donor_c_out)),
+    )
+    c2_pos = vec_add(
+        o2_pos,
+        vec_add(vec_scale(axis, -oc_axis_component), vec_scale(outward, donor_c_out)),
+    )
+    coords[c1_idx] = c1_pos
+    coords[c2_idx] = c2_pos
+
+    bridge_candidates = [
+        atom.GetIdx()
+        for atom in ligand_mol.GetAtoms()
+        if atom.GetSymbol() == "C"
+        and atom.GetIdx() not in {c1_idx, c2_idx}
+        and any(n.GetIdx() in {c1_idx, c2_idx} for n in atom.GetNeighbors())
+        and sum(1 for n in atom.GetNeighbors() if n.GetSymbol() == "H") <= 1
+    ]
+    bridge_idx = bridge_candidates[0] if bridge_candidates else None
+    if bridge_idx is not None:
+        coords[bridge_idx] = vec_add(
+            ligand_mid,
+            vec_scale(outward, donor_c_out + bridge_half_angle_drop),
+        )
+
+    methyl_indices = []
+    for c_idx, donor_c_pos in ((c1_idx, c1_pos), (c2_idx, c2_pos)):
+        attached_carbons = [
+            n.GetIdx()
+            for n in ligand_mol.GetAtomWithIdx(c_idx).GetNeighbors()
+            if n.GetSymbol() == "C" and n.GetIdx() != bridge_idx
+        ]
+        for methyl_idx in attached_carbons:
+            methyl_indices.append(methyl_idx)
+            to_oxygen = unit(vec_sub(coords[o1_idx if c_idx == c1_idx else o2_idx], donor_c_pos))
+            to_bridge = unit(vec_sub(coords.get(bridge_idx, ligand_mid), donor_c_pos))
+            methyl_direction = unit(vec_scale(vec_add(to_oxygen, to_bridge), -1.0))
+            coords[methyl_idx] = vec_add(
+                donor_c_pos,
+                vec_scale(methyl_direction, c_methyl_length),
+            )
+
+    normal = cross(axis, outward)
+    if norm(normal) <= 1e-8:
+        normal = perpendicular_unit(axis, (0.0, 0.0, 1.0))
+    normal = unit(normal)
+
+    hydrogens_by_parent: dict[int, list[int]] = {}
+    for atom in ligand_mol.GetAtoms():
+        if atom.GetSymbol() != "H":
+            continue
+        parent = atom.GetNeighbors()[0].GetIdx()
+        hydrogens_by_parent.setdefault(parent, []).append(atom.GetIdx())
+
+    for parent_idx, h_indices in hydrogens_by_parent.items():
+        parent_pos = coords.get(parent_idx, ligand_mid)
+        heavy_neighbors = [
+            n.GetIdx()
+            for n in ligand_mol.GetAtomWithIdx(parent_idx).GetNeighbors()
+            if n.GetSymbol() != "H" and n.GetIdx() in coords
+        ]
+
+        if parent_idx in methyl_indices and heavy_neighbors:
+            heavy_direction = unit(vec_sub(coords[heavy_neighbors[0]], parent_pos))
+            side = perpendicular_unit(heavy_direction, normal)
+            lift = unit(cross(heavy_direction, side))
+            for i, h_idx in enumerate(h_indices):
+                angle = 2 * math.pi * i / max(1, len(h_indices))
+                h_direction = vec_add(
+                    vec_scale(heavy_direction, -1.0 / 3.0),
+                    vec_scale(
+                        vec_add(
+                            vec_scale(side, math.cos(angle)),
+                            vec_scale(lift, math.sin(angle)),
+                        ),
+                        (8.0 / 9.0) ** 0.5,
+                    ),
+                )
+                coords[h_idx] = vec_add(parent_pos, vec_scale(unit(h_direction), ch_length))
+            continue
+
+        if len(heavy_neighbors) >= 2:
+            direction_sum = (0.0, 0.0, 0.0)
+            for neighbor_idx in heavy_neighbors:
+                direction_sum = vec_add(
+                    direction_sum,
+                    unit(vec_sub(coords[neighbor_idx], parent_pos)),
+                )
+            h_direction = unit(vec_scale(direction_sum, -1.0))
+            coords[h_indices[0]] = vec_add(parent_pos, vec_scale(h_direction, ch_length))
+            for h_idx in h_indices[1:]:
+                coords[h_idx] = coords[h_indices[0]]
+            continue
+
+        if heavy_neighbors:
+            base = unit(vec_sub(parent_pos, coords[heavy_neighbors[0]]))
+        else:
+            base = outward
+        side = perpendicular_unit(base, normal)
+        lift = unit(cross(base, side))
+        for i, h_idx in enumerate(h_indices):
+            angle = 2 * math.pi * i / max(1, len(h_indices))
+            h_direction = unit(
+                vec_add(
+                    base,
+                    vec_add(
+                        vec_scale(side, math.cos(angle) * 0.65),
+                        vec_scale(lift, math.sin(angle) * 0.65),
+                    ),
+                )
+            )
+            coords[h_idx] = vec_add(parent_pos, vec_scale(h_direction, ch_length))
+
+    for atom in ligand_mol.GetAtoms():
+        idx = atom.GetIdx()
+        if idx not in coords:
+            coords[idx] = ligand_mid
+
+    return coords
+
 
 def ethylenediamine_ligand_positions(ligand_mol, donor_indices, target_sites):
     coords = {}
@@ -1042,7 +1486,8 @@ def ethylenediamine_ligand_positions(ligand_mol, donor_indices, target_sites):
 def triethyl_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, spread=0.8):
     direction = unit(target)
 
-    center = target
+    metal_p_length = max(norm(target), 4.0)
+    center = vec_scale(direction, metal_p_length)
     coords = {}
     coords[donor_idx] = center
 
@@ -1054,67 +1499,37 @@ def triethyl_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, sp
     u = unit(cross(direction, ref))
     v = unit(cross(direction, u))
 
-    import math
     p_atom=ligand_mol.GetAtomWithIdx(donor_idx)
 
     first_carbons=[neighbor.GetIdx() for neighbor in p_atom.GetNeighbors() if neighbor.GetSymbol()=="C"]
-    
-    
-    for i, c_idx in enumerate(first_carbons[:3]):
-        second_carbons=[neighbor.GetIdx() for neighbor in ligand_mol.GetAtomWithIdx(c_idx).GetNeighbors() if neighbor.GetSymbol()=="C"]
-        
-        angle = 2 * math.pi * i / 3
+    pc_length = 1.83
+    cc_length = 1.53
+    substituent_directions = _tetrahedral_substituent_directions(direction, u, v)
 
-        radial = vec_add(
-            vec_scale(u, math.cos(angle) * spread),
-            vec_scale(v, math.sin(angle) * spread),
+    for c_idx, pc_direction in zip(first_carbons[:3], substituent_directions):
+        coords[c_idx] = vec_add(center, vec_scale(pc_direction, pc_length))
+
+        second_carbons=[
+            neighbor.GetIdx()
+            for neighbor in ligand_mol.GetAtomWithIdx(c_idx).GetNeighbors()
+            if neighbor.GetSymbol()=="C"
+        ]
+        if not second_carbons:
+            _place_methyl_hydrogens(coords, ligand_mol, c_idx, donor_idx, direction)
+            continue
+
+        c2_idx=second_carbons[0]
+        chain_side = _perpendicular_unit(pc_direction, direction)
+        c1_to_c2_direction = unit(
+            vec_add(
+                vec_scale(pc_direction, 1.0 / 3.0),
+                vec_scale(chain_side, (8.0 / 9.0) ** 0.5),
+            )
         )
+        coords[c2_idx]=vec_add(coords[c_idx], vec_scale(c1_to_c2_direction, cc_length))
 
-        outward = vec_scale(direction, 0.8)
-
-        eth_pos = vec_add(center, vec_add(radial, outward))
-        coords[c_idx] = eth_pos
-
-        if second_carbons:
-            c2_idx=second_carbons[0]
-            eth2_pos=vec_add(center,vec_add(radial,vec_scale(direction,1.6)))
-            coords[c2_idx]=eth2_pos
-            carbon_atom2=ligand_mol.GetAtomWithIdx(c2_idx)
-        
-            h_neighbors2= [neighbor.GetIdx() for neighbor in carbon_atom2.GetNeighbors() if neighbor.GetSymbol() == "H"]
-            for j, h2_idx in enumerate(h_neighbors2):
-                h_angle2 = angle + math.pi / 3 + 2 * math.pi * j / 3
-
-                h_radial2 = vec_add(
-        vec_scale(u, math.cos(h_angle2) * 0.45),
-        vec_scale(v, math.sin(h_angle2) * 0.45),
-    )
-
-                h_outward2 = vec_scale(direction, 0.45)
-
-                coords[h2_idx] = vec_add(
-        eth2_pos,
-        vec_add(h_radial2, h_outward2),
-    )
-
-        carbon_atom=ligand_mol.GetAtomWithIdx(c_idx)
-        
-        h_neighbors= [neighbor.GetIdx() for neighbor in carbon_atom.GetNeighbors() if neighbor.GetSymbol() == "H"]
-        for j, h_idx in enumerate(h_neighbors):
-            h_angle = angle + 2 * math.pi * j / 3
-
-            h_radial = vec_add(
-        vec_scale(u, math.cos(h_angle) * 0.45),
-        vec_scale(v, math.sin(h_angle) * 0.45),
-    )
-
-            h_outward = vec_scale(direction, 0.2)
-
-            coords[h_idx] = vec_add(
-        eth_pos,
-        vec_add(h_radial, h_outward),
-    )
-        
+        _place_methylene_hydrogens(coords, ligand_mol, c_idx, (donor_idx, c2_idx))
+        _place_methyl_hydrogens(coords, ligand_mol, c2_idx, c_idx, pc_direction)
 
     for atom in ligand_mol.GetAtoms():
         idx = atom.GetIdx()
@@ -1123,43 +1538,98 @@ def triethyl_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, sp
 
     return coords
 
-def terpyridine_ligand_positions(ligand_mol, donor_indices, tridentate_index):
-    ligand_conf = ligand_mol.GetConformer()
+def terpyridine_ligand_positions(ligand_mol, donor_indices, target_sites):
+    """Place tpy/terpy as a rigid planar ligand and let terminal M-N lengths adapt."""
+    donor_indices = donor_indices[:3]
+    target_sites = target_sites[:3]
 
-    coords = {}
+    planar_mol = Chem.Mol(ligand_mol)
+    rdDepictor.Compute2DCoords(planar_mol)
+    conf = planar_mol.GetConformer()
 
-    donor_positions = []
-    for idx in donor_indices:
-        pos = ligand_conf.GetAtomPosition(idx)
-        donor_positions.append((pos.x, pos.y, pos.z))
+    local_donors = []
+    for donor_idx in donor_indices:
+        pos = conf.GetAtomPosition(donor_idx)
+        local_donors.append((pos.x, pos.y))
 
-    ligand_mid = (
-        sum(p[0] for p in donor_positions) / 3,
-        sum(p[1] for p in donor_positions) / 3,
-        sum(p[2] for p in donor_positions) / 3,
+    left_donor, center_donor, right_donor = local_donors
+    local_center = center_donor
+    terminal_mid = (
+        (left_donor[0] + right_donor[0]) / 2,
+        (left_donor[1] + right_donor[1]) / 2,
     )
-
-    if tridentate_index == 0:
-        center = (0.0, 0.0, 1.8)
-        angle = 0.0
-    else:
-        center = (0.0, 0.0, -1.8)
-        angle = 3.14159
-
-    for atom in ligand_mol.GetAtoms():
-        idx = atom.GetIdx()
-        pos = ligand_conf.GetAtomPosition(idx)
-        old = (pos.x, pos.y, pos.z)
-
-        centered = vec_sub(old, ligand_mid)
-
-        rotated = (
-            centered[0] * math.cos(angle) - centered[1] * math.sin(angle),
-            centered[0] * math.sin(angle) + centered[1] * math.cos(angle),
-            centered[2],
+    local_axis = (
+        right_donor[0] - left_donor[0],
+        right_donor[1] - left_donor[1],
+    )
+    local_axis_length = (local_axis[0] ** 2 + local_axis[1] ** 2) ** 0.5
+    local_out = (
+        center_donor[0] - terminal_mid[0],
+        center_donor[1] - terminal_mid[1],
+    )
+    local_out_length = (local_out[0] ** 2 + local_out[1] ** 2) ** 0.5
+    if local_axis_length <= 1e-8 or local_out_length <= 1e-8:
+        return translate_tridentate_ligand(
+            ligand_mol,
+            donor_indices,
+            target_sites,
+            reverse=False,
         )
 
-        coords[idx] = vec_add(rotated, center)
+    local_axis = (
+        local_axis[0] / local_axis_length,
+        local_axis[1] / local_axis_length,
+    )
+    local_out = (
+        local_out[0] / local_out_length,
+        local_out[1] / local_out_length,
+    )
+
+    target_center = target_sites[1]
+    target_axis = unit(vec_sub(target_sites[2], target_sites[0]))
+    target_out = unit(target_center)
+    target_out = vec_sub(target_out, vec_scale(target_axis, dot(target_out, target_axis)))
+    if norm(target_out) <= 1e-8:
+        target_out = cross(target_axis, (0.0, 0.0, 1.0))
+    if norm(target_out) <= 1e-8:
+        target_out = cross(target_axis, (0.0, 1.0, 0.0))
+    target_out = unit(target_out)
+
+    heavy_bond_lengths = []
+    for bond in planar_mol.GetBonds():
+        begin_atom = planar_mol.GetAtomWithIdx(bond.GetBeginAtomIdx())
+        end_atom = planar_mol.GetAtomWithIdx(bond.GetEndAtomIdx())
+        if "H" in {begin_atom.GetSymbol(), end_atom.GetSymbol()}:
+            continue
+        begin_pos = conf.GetAtomPosition(begin_atom.GetIdx())
+        end_pos = conf.GetAtomPosition(end_atom.GetIdx())
+        heavy_bond_lengths.append(
+            math.dist((begin_pos.x, begin_pos.y), (end_pos.x, end_pos.y))
+        )
+    if heavy_bond_lengths:
+        sorted_lengths = sorted(heavy_bond_lengths)
+        median_length = sorted_lengths[len(sorted_lengths) // 2]
+        scale = 1.39 / median_length
+    else:
+        scale = 1.0
+
+    coords = {}
+    for atom in planar_mol.GetAtoms():
+        idx = atom.GetIdx()
+        pos = conf.GetAtomPosition(idx)
+        centered = (pos.x - local_center[0], pos.y - local_center[1])
+        axis_component = centered[0] * local_axis[0] + centered[1] * local_axis[1]
+        out_component = centered[0] * local_out[0] + centered[1] * local_out[1]
+
+        coords[idx] = vec_add(
+            target_center,
+            vec_add(
+                vec_scale(target_axis, axis_component * scale),
+                vec_scale(target_out, out_component * scale),
+            ),
+        )
+
+    coords[donor_indices[1]] = target_center
 
     return coords
 
@@ -1258,6 +1728,91 @@ def bipyridine_ligand_positions(ligand_mol, donor_indices, target_sites, ligand_
 
     return coords
 
+
+def planar_bidentate_aromatic_ligand_positions(ligand_mol, donor_indices, target_sites):
+    """Place a rigid aromatic bidentate ligand in its N-metal-N plane."""
+    n1_idx, n2_idx = donor_indices[:2]
+    n1_pos, n2_pos = target_sites
+
+    planar_mol = Chem.Mol(ligand_mol)
+    rdDepictor.Compute2DCoords(planar_mol)
+    conf = planar_mol.GetConformer()
+
+    n1_2d = conf.GetAtomPosition(n1_idx)
+    n2_2d = conf.GetAtomPosition(n2_idx)
+    local_n1 = (n1_2d.x, n1_2d.y)
+    local_n2 = (n2_2d.x, n2_2d.y)
+    local_axis = (local_n2[0] - local_n1[0], local_n2[1] - local_n1[1])
+    local_length = (local_axis[0] ** 2 + local_axis[1] ** 2) ** 0.5
+    if local_length <= 1e-8:
+        return translate_bidentate_ligand(ligand_mol, donor_indices, target_sites)
+
+    local_axis = (local_axis[0] / local_length, local_axis[1] / local_length)
+    local_perp = (-local_axis[1], local_axis[0])
+    local_mid = (
+        (local_n1[0] + local_n2[0]) / 2,
+        (local_n1[1] + local_n2[1]) / 2,
+    )
+    centroid_perp = 0.0
+    for atom in planar_mol.GetAtoms():
+        pos = conf.GetAtomPosition(atom.GetIdx())
+        centered = (pos.x - local_mid[0], pos.y - local_mid[1])
+        centroid_perp += centered[0] * local_perp[0] + centered[1] * local_perp[1]
+    if centroid_perp < 0:
+        local_perp = (-local_perp[0], -local_perp[1])
+
+    target_axis = unit(vec_sub(n2_pos, n1_pos))
+    n_mid = (
+        (n1_pos[0] + n2_pos[0]) / 2,
+        (n1_pos[1] + n2_pos[1]) / 2,
+        (n1_pos[2] + n2_pos[2]) / 2,
+    )
+    target_out = unit(n_mid)
+    if norm(target_out) <= 1e-8:
+        target_out = (0.0, 0.0, 1.0)
+
+    target_out = vec_sub(target_out, vec_scale(target_axis, dot(target_out, target_axis)))
+    if norm(target_out) <= 1e-8:
+        target_out = cross(target_axis, (0.0, 0.0, 1.0))
+    if norm(target_out) <= 1e-8:
+        target_out = cross(target_axis, (0.0, 1.0, 0.0))
+    target_out = unit(target_out)
+
+    target_length = norm(vec_sub(n2_pos, n1_pos))
+    scale = target_length / local_length
+
+    coords = {}
+    for atom in planar_mol.GetAtoms():
+        idx = atom.GetIdx()
+        pos = conf.GetAtomPosition(idx)
+        centered = (pos.x - local_mid[0], pos.y - local_mid[1])
+        axis_component = centered[0] * local_axis[0] + centered[1] * local_axis[1]
+        perp_component = centered[0] * local_perp[0] + centered[1] * local_perp[1]
+
+        placed = vec_add(
+            n_mid,
+            vec_add(
+                vec_scale(target_axis, axis_component * scale),
+                vec_scale(target_out, perp_component * scale),
+            ),
+        )
+        coords[idx] = placed
+
+    # Ensure the donor nitrogens are exactly on their metal-binding sites.
+    coords[n1_idx] = n1_pos
+    coords[n2_idx] = n2_pos
+    return coords
+
+
+def phenanthroline_ligand_positions(ligand_mol, donor_indices, target_sites):
+    """Place phenanthroline as one rigid plane in the N-metal-N plane."""
+    return planar_bidentate_aromatic_ligand_positions(
+        ligand_mol,
+        donor_indices,
+        target_sites,
+    )
+
+
 def water_ligand_positions(ligand_mol, donor_idx, target):
     direction = unit(target)
     coords = {}
@@ -1315,6 +1870,14 @@ def dmso_ligand_positions(ligand_mol, donor_idx, target, ligand_number=0):
     v = unit(cross(direction, u))
 
     angle_offset= ligand_number * math.pi
+    u_rot = vec_add(
+        vec_scale(u, math.cos(angle_offset)),
+        vec_scale(v, math.sin(angle_offset)),
+    )
+    v_rot = vec_add(
+        vec_scale(u, -math.sin(angle_offset)),
+        vec_scale(v, math.cos(angle_offset)),
+    )
 
     s_indices = [
         atom.GetIdx()
@@ -1330,67 +1893,51 @@ def dmso_ligand_positions(ligand_mol, donor_idx, target, ligand_number=0):
         if atom.GetSymbol() == "C"]
     s_idx=s_indices[0]
     o_idx=o_indices[0]
+    so_length = 1.49
+    sc_length = 1.79
 
     if donor_idx==s_idx:
         coords[s_idx]=target
         s_center=target
-        o_pos=vec_add(s_center, vec_scale(direction, 1.2))
+        substituent_directions = _tetrahedral_substituent_directions(
+            direction,
+            u_rot,
+            v_rot,
+        )
+
+        o_pos=vec_add(s_center, vec_scale(substituent_directions[0], so_length))
         coords[o_idx]=o_pos
 
-        for i, c_idx in enumerate(c_indices):
-            angle = angle_offset + 2 * math.pi * i / 2
-
-            side = vec_add(
-                vec_scale(u, math.cos(angle) * 1.0),
-                vec_scale(v, math.sin(angle) * 1.0),
-            )
-
-            c_pos = vec_add(
-                s_center,
-                vec_add(vec_scale(direction, 0.7), side),
-            )
-            coords[c_idx] = c_pos
+        for c_idx, sc_direction in zip(c_indices, substituent_directions[1:]):
+            coords[c_idx] = vec_add(s_center, vec_scale(sc_direction, sc_length))
+            _place_methyl_hydrogens(coords, ligand_mol, c_idx, s_idx, direction)
 
     elif donor_idx==o_idx:
         coords[o_idx]=target
         o_center=target
-        s_pos=vec_add(o_center, vec_scale(direction, 1.2))
+        s_direction = unit(
+            vec_add(
+                vec_scale(direction, 0.5),
+                vec_scale(u_rot, (3.0 ** 0.5) / 2.0),
+            )
+        )
+        s_pos=vec_add(o_center, vec_scale(s_direction, so_length))
         coords[s_idx]=s_pos
+        s_side = _perpendicular_unit(s_direction, v_rot)
+        s_lift = unit(cross(s_direction, s_side))
+        carbon_directions = _tetrahedral_substituent_directions(
+            s_direction,
+            s_side,
+            s_lift,
+        )
 
-        for i, c_idx in enumerate(c_indices):
-            angle = angle_offset + 2 * math.pi * i / 2
+        for c_idx, sc_direction in zip(c_indices, carbon_directions[:2]):
+            coords[c_idx] = vec_add(s_pos, vec_scale(sc_direction, sc_length))
+            _place_methyl_hydrogens(coords, ligand_mol, c_idx, s_idx, s_direction)
 
-            side = vec_add(
-                vec_scale(u, math.cos(angle) * 1.0),
-                vec_scale(v, math.sin(angle) * 1.0),
-            )
-
-            c_pos = vec_add(
-                s_pos,
-                vec_add(vec_scale(direction, 0.6), side),
-            )
-            coords[c_idx] = c_pos
     for atom in ligand_mol.GetAtoms():
         idx= atom.GetIdx()
-        if idx in coords:
-            continue
-        if atom.GetSymbol() == "H":
-            neighbors = atom.GetNeighbors()
-            if neighbors:
-                c_idx = neighbors[0].GetIdx()
-                base = coords.get(c_idx, target)
-
-                angle = angle_offset + idx * 2.1
-                h_side = vec_add(
-                    vec_scale(u, math.cos(angle) * 0.45),
-                    vec_scale(v, math.sin(angle) * 0.45),
-                )
-                h_out = vec_scale(direction, 0.35)
-
-                coords[idx] = vec_add(base, vec_add(h_side, h_out))
-            else:
-                coords[idx] = target
-        else:
+        if idx not in coords:
             coords[idx] = target
     return coords
 
@@ -1673,9 +2220,12 @@ def build_complex_3d(
         return None
 
 
-    def next_free_triplet():
+    def next_free_triplet(ligand_symbol: str | None = None):
         if "octahedral" in geometry.lower() and len(sites) >= 6:
-            triplets = [(0, 2, 1), (3, 4, 5)]
+            if ligand_symbol in {"tpy", "terpy"}:
+                triplets = [(1, 4, 0), (3, 5, 2)]
+            else:
+                triplets = [(0, 2, 1), (3, 4, 5)]
         else:
             triplets = [(i, i + 1, i + 2) for i in range(0, len(sites) - 2, 3)]
 
@@ -1768,10 +2318,14 @@ def build_complex_3d(
                 if ligand_symbol=="en":
                     local_coords=ethylenediamine_ligand_positions(ligand_mol, donor_indices,target_sites)
 
-                elif ligand_symbol=="bipy":
-                    local_coords=bipyridine_ligand_positions(ligand_mol, donor_indices,target_sites, bidentate_index)
+                elif ligand_symbol in ("bipy", "bpy"):
+                    local_coords=planar_bidentate_aromatic_ligand_positions(ligand_mol, donor_indices,target_sites)
+                elif ligand_symbol=="phen":
+                    local_coords=phenanthroline_ligand_positions(ligand_mol, donor_indices,target_sites)
                 elif ligand_symbol=="ox":
                     local_coords=oxalate_ligand_positions(ligand_mol, donor_indices,target_sites)
+                elif ligand_symbol=="acac":
+                    local_coords=acac_ligand_positions(ligand_mol, donor_indices,target_sites)
                 else:
                     local_coords = translate_bidentate_ligand(
                     ligand_mol,
@@ -1801,25 +2355,25 @@ def build_complex_3d(
                 continue
             #tridentate case
             elif denticity==3 and len(donor_overrides)>=3:
-                triplet = next_free_triplet()
+                triplet = next_free_triplet(ligand_symbol)
                 if triplet is None:
                     break       
                 target_sites = (sites[triplet[0]], sites[triplet[1]], sites[triplet[2]])
-                tridentate_index = 0
+                tridentate_index = tridentate_count
                 donor_indices = donor_overrides[:3]
-                if ligand_symbol in ("terpy"):
+                if ligand_symbol in ("tpy", "terpy"):
                     local_coords = terpyridine_ligand_positions(
-        ligand_mol,
-        donor_overrides[:3],
-        tridentate_count,
-    )
+                        ligand_mol,
+                        donor_indices,
+                        target_sites,
+                    )
                 else:
                     local_coords = translate_tridentate_ligand(
-        ligand_mol,
-        donor_overrides[:3],
-        target_sites,
-        reverse=(tridentate_index % 2 == 1),
-    )
+                        ligand_mol,
+                        donor_indices,
+                        target_sites,
+                        reverse=(tridentate_index % 2 == 1),
+                    )
 
                 offset = rw.GetNumAtoms()
 
@@ -1836,6 +2390,7 @@ def build_complex_3d(
                     rw.AddBond(metal_idx, donor_idx + offset, Chem.BondType.DATIVE,)
 
                 site_index += 3
+                tridentate_count += 1
                 continue
             #tetradentate case
             elif denticity==4 and len(donor_overrides)>=4:
@@ -1980,6 +2535,8 @@ def build_complex_3d(
                 local_coords=methyl_ligand_positions(ligand_mol, donor_idx_local,target, site)    
             elif ligand_symbol=="PMe3":
                 local_coords=trimethyl_ligand_positions(ligand_mol, donor_idx_local,target)
+            elif ligand_symbol=="PPh3":
+                local_coords=triphenylphosphine_ligand_positions(ligand_mol, donor_idx_local,target)
             elif ligand_symbol=="dmso":
                 local_coords=dmso_ligand_positions(ligand_mol, donor_idx_local,target,site)
             elif ligand_symbol=="PEt3":
@@ -1990,6 +2547,8 @@ def build_complex_3d(
                 local_coords=water_ligand_positions(ligand_mol, donor_idx_local,target)
             elif ligand_symbol in ("NCS","SCN"):
                 local_coords=thiocyanato_ligand_positions(ligand_mol, donor_idx_local,target,ligand_symbol)    
+            elif ligand_symbol=="N3":
+                local_coords=azido_ligand_positions(ligand_mol, donor_idx_local,target)
             elif ligand_mol.GetNumAtoms() == 2:
                 local_coords = diatomic_ligand_positions(
                     ligand_mol,
