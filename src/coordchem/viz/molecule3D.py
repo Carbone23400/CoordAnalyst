@@ -1832,24 +1832,65 @@ def water_ligand_positions(ligand_mol, donor_idx, target):
         if atom.GetSymbol() == "H"
     ]
 
-    angle = 0.55
-    oh_distance = 0.75
-    outward = vec_scale(direction, oh_distance)
+    hoh_angle = math.radians(104.5)
+    oh_distance = 0.96
+    forward = math.cos(hoh_angle / 2.0)
+    lateral = math.sin(hoh_angle / 2.0)
 
     if len(h_indices) >= 2:
         coords[h_indices[0]] = vec_add(
             target,
-            vec_add(outward, vec_scale(side, angle)),
+            vec_scale(
+                vec_add(
+                    vec_scale(direction, forward),
+                    vec_scale(side, lateral),
+                ),
+                oh_distance,
+            ),
         )
 
         coords[h_indices[1]] = vec_add(
             target,
-            vec_add(outward, vec_scale(side, -angle)),
+            vec_scale(
+                vec_add(
+                    vec_scale(direction, forward),
+                    vec_scale(side, -lateral),
+                ),
+                oh_distance,
+            ),
         )
 
     for atom in ligand_mol.GetAtoms():
         idx = atom.GetIdx()
         if idx not in coords:
+            coords[idx] = target
+
+    return coords
+
+
+def hydroxo_ligand_positions(ligand_mol, donor_idx, target):
+    direction = unit(target)
+    coords = {donor_idx: target}
+
+    if abs(direction[0]) < 0.9:
+        ref = (1.0, 0.0, 0.0)
+    else:
+        ref = (0.0, 1.0, 0.0)
+
+    side = unit(cross(direction, ref))
+    oh_distance = 0.96
+    h_direction = unit(
+        vec_add(
+            vec_scale(direction, 1.0 / 3.0),
+            vec_scale(side, (8.0 / 9.0) ** 0.5),
+        )
+    )
+
+    for atom in ligand_mol.GetAtoms():
+        idx = atom.GetIdx()
+        if atom.GetSymbol() == "H":
+            coords[idx] = vec_add(target, vec_scale(h_direction, oh_distance))
+        elif idx not in coords:
             coords[idx] = target
 
     return coords
@@ -2145,23 +2186,41 @@ def edta_ligand_positions(ligand_mol, donor_indices, target_sites):
         coords[idx] = vec_add(anchor_pos, vec_scale(radial, 0.9))
 
   
+    hydrogen_parents: dict[int, list[int]] = {}
     for atom in ligand_mol.GetAtoms():
         if atom.GetSymbol() != "H":
             continue
-        h_idx = atom.GetIdx()
-        if h_idx in coords:
-            continue
         neighbors = atom.GetNeighbors()
         if not neighbors:
-            coords[h_idx] = (0.0, 0.0, 0.0)
+            coords[atom.GetIdx()] = (0.0, 0.0, 0.0)
             continue
-        parent_idx = neighbors[0].GetIdx()
+        hydrogen_parents.setdefault(neighbors[0].GetIdx(), []).append(atom.GetIdx())
+
+    for parent_idx, h_indices in hydrogen_parents.items():
         if parent_idx not in coords:
-            coords[h_idx] = (0.0, 0.0, 0.0)
+            for h_idx in h_indices:
+                coords[h_idx] = (0.0, 0.0, 0.0)
             continue
+
+        heavy_neighbors = [
+            neighbor.GetIdx()
+            for neighbor in ligand_mol.GetAtomWithIdx(parent_idx).GetNeighbors()
+            if neighbor.GetSymbol() != "H" and neighbor.GetIdx() in coords
+        ]
+        if len(h_indices) == 2 and len(heavy_neighbors) >= 2:
+            _place_methylene_hydrogens(
+                coords,
+                ligand_mol,
+                parent_idx,
+                tuple(heavy_neighbors[:2]),
+            )
+            continue
+
         parent_pos = coords[parent_idx]
         radial = unit(parent_pos) if norm(parent_pos) > 0.1 else (0.0, 0.0, 1.0)
-        coords[h_idx] = vec_add(parent_pos, vec_scale(radial, 1.05))
+        for h_idx in h_indices:
+            if h_idx not in coords:
+                coords[h_idx] = vec_add(parent_pos, vec_scale(radial, 1.05))
 
     return coords
 
@@ -2444,17 +2503,6 @@ def build_complex_3d(
                         a1 = bond.GetBeginAtomIdx() + offset
                         a2 = bond.GetEndAtomIdx() + offset
                         rw.AddBond(a1, a2, bond.GetBondType())
-                    if ligand_symbol == "Cp":
-                        #c_indices = [atom.GetIdx()for atom in ligand_mol.GetAtoms() if atom.GetSymbol() == "C" ]
-                        dummy = Chem.Atom("He")
-                        dummy_idx = rw.AddAtom(dummy)
-
-                        coords[dummy_idx] = target
-
-                        rw.AddBond( metal_idx,dummy_idx,Chem.BondType.DATIVE)
-
-                        #for c_idx in c_indices[:5]:
-                            #rw.AddBond(metal_idx,  c_idx + offset,  Chem.BondType.DATIVE )
 
                     site_index+=1
                     continue
@@ -2545,6 +2593,8 @@ def build_complex_3d(
                 local_coords=nitrito_ligand_positions(ligand_mol, donor_idx_local,target,ligand_symbol)
             elif ligand_symbol=="H2O":
                 local_coords=water_ligand_positions(ligand_mol, donor_idx_local,target)
+            elif ligand_symbol=="OH":
+                local_coords=hydroxo_ligand_positions(ligand_mol, donor_idx_local,target)
             elif ligand_symbol in ("NCS","SCN"):
                 local_coords=thiocyanato_ligand_positions(ligand_mol, donor_idx_local,target,ligand_symbol)    
             elif ligand_symbol=="N3":
@@ -2650,6 +2700,114 @@ def _to_parsed(complex_or_formula) -> ParsedComplex:
     """Best-effort coercion to a ``ParsedComplex``."""
     return parse_complex_input(complex_or_formula)
 
+
+def _cp_ring_centers(mol: Chem.Mol) -> list[Position]:
+    conf = mol.GetConformer()
+    centers = []
+
+    for ring in mol.GetRingInfo().AtomRings():
+        if len(ring) != 5:
+            continue
+        if any(mol.GetAtomWithIdx(idx).GetSymbol() != "C" for idx in ring):
+            continue
+
+        centers.append(
+            (
+                sum(conf.GetAtomPosition(idx).x for idx in ring) / 5.0,
+                sum(conf.GetAtomPosition(idx).y for idx in ring) / 5.0,
+                sum(conf.GetAtomPosition(idx).z for idx in ring) / 5.0,
+            )
+        )
+
+    if centers:
+        return centers
+
+    adjacency = {idx: set() for idx in range(1, mol.GetNumAtoms())}
+    for bond in mol.GetBonds():
+        begin_idx = bond.GetBeginAtomIdx()
+        end_idx = bond.GetEndAtomIdx()
+        if 0 in {begin_idx, end_idx}:
+            continue
+        adjacency[begin_idx].add(end_idx)
+        adjacency[end_idx].add(begin_idx)
+
+    seen = set()
+    for start in adjacency:
+        if start in seen:
+            continue
+        stack = [start]
+        component = []
+        seen.add(start)
+        while stack:
+            idx = stack.pop()
+            component.append(idx)
+            for neighbor_idx in adjacency[idx]:
+                if neighbor_idx not in seen:
+                    seen.add(neighbor_idx)
+                    stack.append(neighbor_idx)
+
+        carbon_indices = [
+            idx for idx in component if mol.GetAtomWithIdx(idx).GetSymbol() == "C"
+        ]
+        heavy_symbols = [
+            mol.GetAtomWithIdx(idx).GetSymbol()
+            for idx in component
+            if mol.GetAtomWithIdx(idx).GetSymbol() != "H"
+        ]
+        if len(carbon_indices) != 5 or any(symbol != "C" for symbol in heavy_symbols):
+            continue
+
+        centers.append(
+            (
+                sum(conf.GetAtomPosition(idx).x for idx in carbon_indices) / 5.0,
+                sum(conf.GetAtomPosition(idx).y for idx in carbon_indices) / 5.0,
+                sum(conf.GetAtomPosition(idx).z for idx in carbon_indices) / 5.0,
+            )
+        )
+
+    return centers
+
+
+def _add_dashed_line_to_view(view, start: Position, end: Position) -> None:
+    dash_count = 7
+    gap_fraction = 0.45
+    vector = vec_sub(end, start)
+
+    for i in range(dash_count):
+        dash_start_t = i / dash_count
+        dash_end_t = (i + (1.0 - gap_fraction)) / dash_count
+        dash_start = vec_add(start, vec_scale(vector, dash_start_t))
+        dash_end = vec_add(start, vec_scale(vector, dash_end_t))
+        view.addCylinder(
+            {
+                "start": {
+                    "x": dash_start[0],
+                    "y": dash_start[1],
+                    "z": dash_start[2],
+                },
+                "end": {
+                    "x": dash_end[0],
+                    "y": dash_end[1],
+                    "z": dash_end[2],
+                },
+                "radius": 0.035,
+                "color": "grey",
+                "fromCap": 1,
+                "toCap": 1,
+            }
+        )
+
+
+def _add_cp_center_lines_to_view(view, mol: Chem.Mol) -> None:
+    if mol.GetNumConformers() == 0:
+        return
+
+    metal_pos = mol.GetConformer().GetAtomPosition(0)
+    metal = (metal_pos.x, metal_pos.y, metal_pos.z)
+    for center in _cp_ring_centers(mol):
+        _add_dashed_line_to_view(view, metal, center)
+
+
 #function to display the molecule on a notebook
 
 def view_complex_3d(
@@ -2670,8 +2828,9 @@ def view_complex_3d(
     view.addModel(block, "sdf")
     view.setStyle({}, {"stick": {}, "sphere": {"scale": 0.25}})
     view.setStyle({}, {"stick": {"radius": 0.12}, "sphere": {"scale": 0.18}})
-    view.setStyle({"elem": "He"}, {"sphere": {"scale": 0.01, "color":"white"}, "stick": {"radius": 0.03,"color":"grey"}})
 
+    if "Cp" in parsed.ligands:
+        _add_cp_center_lines_to_view(view, mol)
 
 
     view.setBackgroundColor("white")

@@ -16,7 +16,7 @@ pytest.importorskip("rdkit")
 from rdkit import Chem  # noqa: E402
 
 from coordchem.complex import Complex  # noqa: E402
-from coordchem.parser import parse_formula  # noqa: E402
+from coordchem.parser import KNOWN_LIGANDS, parse_formula  # noqa: E402
 from coordchem.viz.molecule3D import (  # noqa: E402
     bidentate_site_pair_indices,
     build_complex_3d,
@@ -25,6 +25,7 @@ from coordchem.viz.molecule3D import (  # noqa: E402
     geometry_positions,
     octahedral_positions,
     parse_complex_input,
+    view_complex_3d,
 )
 from coordchem.viz.ligand_data import LIGAND_SMILES  # noqa: E402
 
@@ -577,6 +578,93 @@ class TestBuildComplex:
         assert no_lengths[:6] == pytest.approx([1.22] * 6, abs=0.03)
         assert no_lengths[6:] == pytest.approx([1.30] * 6, abs=0.03)
 
+    def test_nitrosyl_uses_no_plus_linear_convention(self):
+        parsed = parse_formula("[Co(NO)6]")
+        mol = build_complex_3d(parsed)
+        ligand_mol = Chem.MolFromSmiles(LIGAND_SMILES["NO"])
+
+        metal_nitrogen_oxygen_angles = _center_angles_matching_neighbors(
+            mol,
+            center_symbol="N",
+            neighbor_symbols=("Co", "O"),
+        )
+
+        assert KNOWN_LIGANDS["NO"][1] == 1
+        assert Chem.GetFormalCharge(ligand_mol) == 1
+        assert len(metal_nitrogen_oxygen_angles) == 6
+        assert all(
+            angle == pytest.approx(180.0, abs=0.5)
+            for angle in metal_nitrogen_oxygen_angles
+        )
+
+    def test_aqua_3d_uses_realistic_hoh_angle(self):
+        parsed = parse_formula("[Co(H2O)6]")
+        mol = build_complex_3d(parsed)
+
+        hoh_angles = _center_angles_matching_neighbors(
+            mol,
+            center_symbol="O",
+            neighbor_symbols=("H", "H"),
+        )
+        oh_lengths = _bond_lengths_for_symbols(mol, {"O", "H"})
+
+        assert len(hoh_angles) == 6
+        assert all(angle == pytest.approx(104.5, abs=0.5) for angle in hoh_angles)
+        assert len(oh_lengths) == 12
+        assert all(length == pytest.approx(0.96, abs=0.03) for length in oh_lengths)
+
+    def test_hydroxo_3d_is_bent_not_linear(self):
+        parsed = parse_formula("[Co(OH)6]")
+        mol = build_complex_3d(parsed)
+
+        metal_oxygen_hydrogen_angles = _center_angles_matching_neighbors(
+            mol,
+            center_symbol="O",
+            neighbor_symbols=("Co", "H"),
+        )
+        oh_lengths = _bond_lengths_for_symbols(mol, {"O", "H"})
+
+        assert len(metal_oxygen_hydrogen_angles) == 6
+        assert all(
+            angle == pytest.approx(109.47, abs=0.5)
+            for angle in metal_oxygen_hydrogen_angles
+        )
+        assert len(oh_lengths) == 6
+        assert all(length == pytest.approx(0.96, abs=0.03) for length in oh_lengths)
+
+    def test_edta_3d_methylene_hydrogens_are_tetrahedral(self):
+        parsed = parse_formula("[Co(EDTA)]")
+        mol = build_complex_3d(parsed)
+
+        hch_angles = _carbon_hydrogen_hydrogen_angles(mol)
+
+        assert len(hch_angles) == 6
+        assert all(angle == pytest.approx(109.47, abs=0.5) for angle in hch_angles)
+
+    def test_cp_3d_uses_no_dummy_atom_or_artificial_metal_carbon_bonds(self):
+        parsed = parse_formula("[Co(Cp)6]")
+        mol = build_complex_3d(parsed)
+
+        assert sum(1 for atom in mol.GetAtoms() if atom.GetSymbol() == "He") == 0
+        assert sum(1 for atom in mol.GetAtoms() if atom.GetAtomicNum() == 0) == 0
+        assert len(
+            [
+                bond
+                for bond in mol.GetAtomWithIdx(0).GetBonds()
+                if bond.GetBondType() == Chem.BondType.DATIVE
+                and mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0)).GetSymbol() == "C"
+            ]
+        ) == 0
+
+    def test_cp_3d_view_draws_dashed_lines_to_ring_centers(self):
+        pytest.importorskip("py3Dmol")
+
+        view = view_complex_3d("[Co(Cp)6]")
+        html = view._make_html()
+
+        assert "addCylinder" in html
+        assert html.count("addCylinder") == 42
+
     def test_hydride_complex_builds_h_donors(self):
         parsed = parse_formula("[FeH6]4-")
         mol = build_complex_3d(parsed)
@@ -754,6 +842,65 @@ def _center_angles_for_symbol(mol, symbol):
                         neighbor_indices[j],
                     )
                 )
+
+    return angles
+
+
+def _center_angles_matching_neighbors(mol, center_symbol, neighbor_symbols):
+    expected = sorted(neighbor_symbols)
+    angles = []
+
+    for atom in mol.GetAtoms():
+        if atom.GetIdx() == 0 or atom.GetSymbol() != center_symbol:
+            continue
+
+        neighbor_indices = [neighbor.GetIdx() for neighbor in atom.GetNeighbors()]
+        for i in range(len(neighbor_indices)):
+            for j in range(i + 1, len(neighbor_indices)):
+                actual = sorted(
+                    [
+                        mol.GetAtomWithIdx(neighbor_indices[i]).GetSymbol(),
+                        mol.GetAtomWithIdx(neighbor_indices[j]).GetSymbol(),
+                    ]
+                )
+                if actual != expected:
+                    continue
+
+                angles.append(
+                    _atom_angle(
+                        mol,
+                        neighbor_indices[i],
+                        atom.GetIdx(),
+                        neighbor_indices[j],
+                    )
+                )
+
+    return angles
+
+
+def _carbon_hydrogen_hydrogen_angles(mol):
+    angles = []
+
+    for atom in mol.GetAtoms():
+        if atom.GetSymbol() != "C":
+            continue
+
+        hydrogen_indices = [
+            neighbor.GetIdx()
+            for neighbor in atom.GetNeighbors()
+            if neighbor.GetSymbol() == "H"
+        ]
+        if len(hydrogen_indices) != 2:
+            continue
+
+        angles.append(
+            _atom_angle(
+                mol,
+                hydrogen_indices[0],
+                atom.GetIdx(),
+                hydrogen_indices[1],
+            )
+        )
 
     return angles
 

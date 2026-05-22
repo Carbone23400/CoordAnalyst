@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 from html import escape
 from importlib import import_module
-from math import cos, pi, sin
+from math import atan2, cos, pi, sin
 from pathlib import Path
 import re
 from typing import Callable
@@ -753,6 +753,11 @@ def _should_use_cp_sandwich_svg(parsed: ParsedComplex, ligand_items: list[str]) 
     return len(ligand_items) == 2 and all(ligand == "Cp" for ligand in ligand_items)
 
 
+def _should_use_cp_stylized_svg(ligand_items: list[str]) -> bool:
+    """Return True when Cp must avoid the charged one-carbon RDKit drawing."""
+    return "Cp" in ligand_items
+
+
 def _cp_ring_points(
     cx: float,
     cy: float,
@@ -774,6 +779,376 @@ def _cp_ring_points(
 
 def _format_points(points: list[tuple[float, float]]) -> str:
     return " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+
+
+def _oriented_cp_ring_points(
+    cx: float,
+    cy: float,
+    radial_x: float,
+    radial_y: float,
+    long_radius: float,
+    short_radius: float,
+) -> list[tuple[float, float]]:
+    """Return Cp pentagon points flattened perpendicular to the M-Cp axis."""
+    length = (radial_x * radial_x + radial_y * radial_y) ** 0.5
+    if length <= 1e-8:
+        radial_x, radial_y = 0.0, -1.0
+    else:
+        radial_x, radial_y = radial_x / length, radial_y / length
+
+    tangent_x, tangent_y = -radial_y, radial_x
+    rotation = -90.0 * pi / 180
+    return [
+        (
+            cx
+            + long_radius * tangent_x * cos(rotation + 2 * pi * i / 5)
+            + short_radius * radial_x * sin(rotation + 2 * pi * i / 5),
+            cy
+            + long_radius * tangent_y * cos(rotation + 2 * pi * i / 5)
+            + short_radius * radial_y * sin(rotation + 2 * pi * i / 5),
+        )
+        for i in range(5)
+    ]
+
+
+def _cp_ellipse_rotation(radial_x: float, radial_y: float) -> float:
+    """Return the SVG rotation angle for a Cp delocalization ellipse."""
+    length = (radial_x * radial_x + radial_y * radial_y) ** 0.5
+    if length <= 1e-8:
+        radial_x, radial_y = 0.0, -1.0
+    else:
+        radial_x, radial_y = radial_x / length, radial_y / length
+
+    tangent_x, tangent_y = -radial_y, radial_x
+    return 180.0 * atan2(tangent_y, tangent_x) / pi
+
+
+def _screen_point(
+    site: Site,
+    center_x: float,
+    center_y: float,
+    scale: float,
+) -> tuple[float, float]:
+    """Map layout coordinates to SVG pixels."""
+    return center_x + site.x * scale, center_y - site.y * scale
+
+
+def _average_screen_point(
+    sites: tuple[Site, ...],
+    center_x: float,
+    center_y: float,
+    scale: float,
+) -> tuple[float, float]:
+    """Return the average screen point of a ligand site group."""
+    points = [_screen_point(site, center_x, center_y, scale) for site in sites]
+    return (
+        sum(point[0] for point in points) / len(points),
+        sum(point[1] for point in points) / len(points),
+    )
+
+
+def _line_start_near_metal(
+    center_x: float,
+    center_y: float,
+    end_x: float,
+    end_y: float,
+    offset: float,
+) -> tuple[float, float]:
+    """Start a coordination line just outside the metal label."""
+    dx = end_x - center_x
+    dy = end_y - center_y
+    length = (dx * dx + dy * dy) ** 0.5
+    if length <= 1e-8:
+        return center_x, center_y
+
+    return center_x + dx / length * offset, center_y + dy / length * offset
+
+
+def _coordination_bond_svg(
+    bond_idx: int,
+    atom_idx: int,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    style: str,
+    extra_class: str = "",
+) -> str:
+    """Return one compact SVG coordination bond."""
+    x1, y1 = start
+    x2, y2 = end
+    class_suffix = f" {extra_class}" if extra_class else ""
+    if style == "dash":
+        dx = x2 - x1
+        dy = y2 - y1
+        length = (dx * dx + dy * dy) ** 0.5 or 1.0
+        perp_x = -dy / length
+        perp_y = dx / length
+        hatch_lines: list[str] = []
+        for i in range(1, 8):
+            fraction = i / 8
+            center_x = x1 + dx * fraction
+            center_y = y1 + dy * fraction
+            width = 1.2 + 7.0 * fraction
+            hatch_lines.append(
+                (
+                    f"<line x1='{center_x - perp_x * width / 2:.1f}' "
+                    f"y1='{center_y - perp_y * width / 2:.1f}' "
+                    f"x2='{center_x + perp_x * width / 2:.1f}' "
+                    f"y2='{center_y + perp_y * width / 2:.1f}'/>"
+                )
+            )
+        return (
+            f"<g class='bond-{bond_idx} atom-0 atom-{atom_idx} coord-bond "
+            f"coord-dash{class_suffix}'>\n"
+            + "\n".join(hatch_lines)
+            + "\n</g>"
+        )
+
+    if style == "wedge":
+        dx = x2 - x1
+        dy = y2 - y1
+        length = (dx * dx + dy * dy) ** 0.5 or 1.0
+        perp_x = -dy / length
+        perp_y = dx / length
+        width = 8.0
+        return (
+            f"<polygon class='bond-{bond_idx} atom-0 atom-{atom_idx} "
+            f"coord-bond coord-wedge{class_suffix}' "
+            f"points='{x1:.1f},{y1:.1f} "
+            f"{x2 + perp_x * width / 2:.1f},{y2 + perp_y * width / 2:.1f} "
+            f"{x2 - perp_x * width / 2:.1f},{y2 - perp_y * width / 2:.1f}'/>"
+        )
+
+    return (
+        f"<path class='bond-{bond_idx} atom-0 atom-{atom_idx} "
+        f"coord-bond{class_suffix}' "
+        f"d='M {x1:.1f},{y1:.1f} L {x2:.1f},{y2:.1f}'/>"
+    )
+
+
+def _cp_ring_svg(
+    atom_idx: int,
+    bond_idx: int,
+    center_x: float,
+    center_y: float,
+    ring_x: float,
+    ring_y: float,
+    panel_size: float,
+    style: str,
+) -> str:
+    """Return one stylized Cp ring and its centroid bond."""
+    radial_x = ring_x - center_x
+    radial_y = ring_y - center_y
+    ring_long = panel_size * 0.115
+    ring_short = panel_size * 0.034
+    inner_long = ring_long * 0.55
+    inner_short = ring_short * 0.48
+    points = _oriented_cp_ring_points(
+        ring_x,
+        ring_y,
+        radial_x,
+        radial_y,
+        ring_long,
+        ring_short,
+    )
+    rotation = _cp_ellipse_rotation(radial_x, radial_y)
+    start = _line_start_near_metal(
+        center_x,
+        center_y,
+        ring_x,
+        ring_y,
+        panel_size * 0.035,
+    )
+
+    return "\n".join(
+        [
+            _coordination_bond_svg(
+                bond_idx,
+                atom_idx,
+                start,
+                (ring_x, ring_y),
+                style,
+                extra_class="cp-bond",
+            ),
+            (
+                f"<polygon class='atom-{atom_idx} cp-ring' "
+                f"points='{_format_points(points)}'/>"
+            ),
+            (
+                f"<ellipse class='cp-delocalized-ring' cx='{ring_x:.1f}' "
+                f"cy='{ring_y:.1f}' rx='{inner_long:.1f}' ry='{inner_short:.1f}' "
+                f"transform='rotate({rotation:.1f} {ring_x:.1f} {ring_y:.1f})'/>"
+            ),
+            (
+                f"<circle class='atom-{atom_idx}' cx='{ring_x:.1f}' "
+                f"cy='{ring_y:.1f}' r='0.1' fill='none'/>"
+            ),
+        ]
+    )
+
+
+def _cp_stylized_panel_svg(
+    parsed: ParsedComplex,
+    geometry: str,
+    panel_x: float,
+    panel_width: float,
+    size: int,
+) -> str:
+    """Draw a Cp-containing complex with centroid Cp rings in one panel."""
+    ligand_items = _expand_ligands(parsed)
+    site_groups = _site_groups_for_ligands(parsed, ligand_items, geometry)
+    center_x = panel_x + panel_width / 2
+    center_y = size / 2
+    panel_size = min(panel_width, size)
+    scale = panel_size * 0.085
+    metal_offset = panel_size * 0.035
+
+    elements: list[str] = []
+    label_elements: list[str] = []
+    atom_idx = 1
+    bond_idx = 0
+
+    for ligand_symbol, anchors in zip(ligand_items, site_groups):
+        if not anchors:
+            continue
+
+        ligand_x, ligand_y = _average_screen_point(
+            anchors,
+            center_x,
+            center_y,
+            scale,
+        )
+        anchor = anchors[0]
+
+        if ligand_symbol == "Cp":
+            elements.append(
+                _cp_ring_svg(
+                    atom_idx,
+                    bond_idx,
+                    center_x,
+                    center_y,
+                    ligand_x,
+                    ligand_y,
+                    panel_size,
+                    anchor.style,
+                )
+            )
+        else:
+            start = _line_start_near_metal(
+                center_x,
+                center_y,
+                ligand_x,
+                ligand_y,
+                metal_offset,
+            )
+            elements.append(
+                _coordination_bond_svg(
+                    bond_idx,
+                    atom_idx,
+                    start,
+                    (ligand_x, ligand_y),
+                    anchor.style,
+                )
+            )
+
+            if len(anchors) == 1 and _should_use_compact_monodentate_label(
+                ligand_symbol,
+                parsed.ligand_denticity.get(ligand_symbol, 1),
+                geometry,
+            ):
+                label = _monodentate_label(ligand_symbol, anchor)
+            else:
+                label = ligand_symbol
+
+            label_elements.append(
+                (
+                    f"<text class='atom-{atom_idx} ligand-label' "
+                    f"x='{ligand_x:.1f}' y='{ligand_y:.1f}'>"
+                    f"{escape(label)}</text>"
+                )
+            )
+
+        atom_idx += 1
+        bond_idx += 1
+
+    metal_label = escape(parsed.metal)
+    elements.extend(label_elements)
+    elements.append(
+        (
+            f"<text class='atom-0 cp-metal' x='{center_x:.1f}' "
+            f"y='{center_y:.1f}'>{metal_label}</text>"
+        )
+    )
+    return "\n".join(elements)
+
+
+def _cp_stylized_svg(
+    parsed: ParsedComplex,
+    size: int,
+    title: str | None,
+    drawing_variants: list[tuple[ParsedComplex, str, str]],
+    display_labels: bool,
+) -> str:
+    """Draw Cp-containing complexes using centroid Cp rings for every geometry."""
+    panel_count = len(drawing_variants)
+    panel_width = size / panel_count
+    panels = [
+        _cp_stylized_panel_svg(
+            variant_parsed,
+            variant_geometry,
+            panel_x=panel_width * idx,
+            panel_width=panel_width,
+            size=size,
+        )
+        for idx, (variant_parsed, variant_geometry, _) in enumerate(drawing_variants)
+    ]
+
+    title_markup = ""
+    footer_markup = ""
+    if display_labels and title:
+        title_markup = (
+            f"<text x='{size / 2:.1f}' y='28' text-anchor='middle' "
+            "font-family='Arial, Helvetica, sans-serif' font-size='18' "
+            "font-weight='700' fill='#111111'>"
+            f"{escape(title)}</text>"
+        )
+
+    if display_labels:
+        footers: list[str] = []
+        for idx, (_, _, legend) in enumerate(drawing_variants):
+            x = panel_width * (idx + 0.5)
+            footers.append(
+                (
+                    "<text class='coordchem-geometry-label' "
+                    f"x='{x:.1f}' y='{size - 18}' text-anchor='middle' "
+                    "font-family='Arial, Helvetica, sans-serif' font-size='18' "
+                    "font-weight='700' fill='#111111'>"
+                    f"{escape(legend)}</text>"
+                )
+            )
+        footer_markup = "\n".join(footers)
+
+    return f"""<?xml version='1.0' encoding='iso-8859-1'?>
+<svg version='1.1' baseProfile='full'
+              xmlns='http://www.w3.org/2000/svg'
+                      xmlns:rdkit='http://www.rdkit.org/xml'
+                      xmlns:xlink='http://www.w3.org/1999/xlink'
+                  xml:space='preserve'
+width='{size}px' height='{size}px' viewBox='0 0 {size} {size}'>
+<rect width='{size}' height='{size}' fill='#FFFFFF'/>
+<style>
+  .coord-bond {{ stroke:#000000; stroke-width:2.2px; stroke-linecap:round; stroke-linejoin:round; fill:none; }}
+  .cp-bond {{ stroke:#000000; stroke-width:2.2px; stroke-linecap:round; stroke-linejoin:round; fill:none; }}
+  .coord-dash {{ stroke:#000000; stroke-width:2.0px; stroke-linecap:round; fill:none; }}
+  .coord-wedge {{ stroke:none; fill:#000000; }}
+  .cp-ring {{ stroke:#000000; stroke-width:2.4px; stroke-linejoin:round; fill:none; }}
+  .cp-delocalized-ring {{ stroke:#000000; stroke-width:2.0px; fill:none; }}
+  .cp-metal {{ font-family:Arial, Helvetica, sans-serif; font-size:{size * 0.040:.1f}px; font-weight:400; fill:#000000; text-anchor:middle; dominant-baseline:central; }}
+  .ligand-label {{ font-family:Arial, Helvetica, sans-serif; font-size:{size * 0.034:.1f}px; font-weight:400; fill:#000000; text-anchor:middle; dominant-baseline:central; }}
+</style>
+{chr(10).join(panels)}
+{title_markup}
+{footer_markup}
+</svg>"""
 
 
 def _cp_sandwich_svg(
@@ -955,6 +1330,14 @@ def diagram_2d_svg(
             size=size,
             title=None,
             geometry="linear",
+        )
+    if _should_use_cp_stylized_svg(ligand_items):
+        return _cp_stylized_svg(
+            parsed,
+            size=size,
+            title=title,
+            drawing_variants=drawing_variants,
+            display_labels=display_labels,
         )
 
     is_edta_drawing = should_use_edta_layout(parsed, ligand_items, geometry)

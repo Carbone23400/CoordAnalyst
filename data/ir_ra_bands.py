@@ -228,11 +228,8 @@ SEED_BANDS = [
     # =========================================================================
     # Linear NO+ (3-electron donor): very high frequency
     ("NO",  "terminal", "any", "IR",   1650, 1900, "very strong", "N≡O stretch (linear)", True,  False, "Nakamoto Vol.2 p.232"),
-    # Bent NO (1-electron donor): lower frequency
-    ("NO",  "terminal", "any", "IR",   1520, 1650, "very strong", "N=O stretch (bent)",   True,  False, "Nakamoto Vol.2 p.235"),
     # Raman bands for NO (Nakamoto Vol.2, pp. 230–252)
     ("NO",  "terminal", "any", "Raman", 1650, 1900, "strong",      "N≡O stretch (linear)",       False, True, "Nakamoto Vol.2 p.232"),
-    ("NO",  "terminal", "any", "Raman", 1520, 1650, "medium",      "N=O stretch (bent)",         False, True, "Nakamoto Vol.2 p.235"),
     ("NO",  "terminal", "any", "Raman",  450,  600, "strong",      "M–N stretch",                False, True, "Nakamoto Vol.2 p.237"),
 
     # =========================================================================
@@ -673,7 +670,9 @@ class IRBandDB:
 
     def get_all_ligands(self) -> list[str]:
         """Return all ligand symbols present in the database."""
-        rows = self._conn.execute().fetchall()
+        rows = self._conn.execute(
+            "SELECT DISTINCT ligand FROM ir_ra_bands ORDER BY ligand"
+        ).fetchall()
         return [r[0] for r in rows]
 
     def get_bands_in_range(
