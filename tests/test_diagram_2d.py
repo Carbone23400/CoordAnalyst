@@ -228,6 +228,26 @@ def test_cp2_complex_uses_sandwich_centroid_representation():
     assert ">sandwich<" not in svg
 
 
+def test_cp_complexes_keep_centroid_representation_outside_cn2():
+    svg = diagram_2d_svg("[Co(Cp)6]", display_labels=False)
+
+    assert svg.count("class='cp-delocalized-ring'") == 6
+    assert "cp-bond" in svg
+    assert "coord-dash cp-bond" in svg
+    assert "coord-wedge cp-bond" in svg
+    assert ">Co<" in svg
+    assert "[cH-]" not in svg
+
+
+def test_mixed_cp_complex_uses_centroid_rings_and_compact_ligands():
+    svg = diagram_2d_svg("[Ti(Cp)2Cl2]", display_labels=False)
+
+    assert svg.count("class='cp-delocalized-ring'") == 4
+    assert "cp-bond" in svg
+    assert ">Cl<" in svg
+    assert ">Ti<" in svg
+
+
 def test_phen_uses_1_10_phenanthroline_donor_pattern():
     from rdkit import Chem
 

@@ -6,7 +6,14 @@ Test suite for coordchem.database.ir_bands
 Run with:  python -m pytest tests/test_ir_ra_bands.py -v
 """
 
+from pathlib import Path
+import sys
+
 import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from data.ir_ra_bands import IRBandDB, BandRecord
 
@@ -257,6 +264,26 @@ class TestPolydentateLigands:
         bands = db.get_bands("acac", spectrum_type="IR")
         assert any("C=O" in b.assignment or "C=C" in b.assignment
                    for b in bands)
+
+
+class TestNitrosyl:
+
+    def test_no_uses_only_linear_nitrosyl_bands(self, db):
+        bands = db.get_bands("NO", coordination="terminal", spectrum_type="IR")
+        assignments = [b.assignment for b in bands]
+
+        assert any("linear" in assignment for assignment in assignments)
+        assert not any("bent" in assignment for assignment in assignments)
+        assert not any("N=O" in assignment for assignment in assignments)
+        assert all(b.wn_min >= 1650 for b in bands if "stretch" in b.assignment)
+
+    def test_no_raman_uses_only_linear_nitrosyl_stretch(self, db):
+        bands = db.get_bands("NO", coordination="terminal", spectrum_type="Raman")
+        stretch_assignments = [b.assignment for b in bands if "stretch" in b.assignment]
+
+        assert any("linear" in assignment for assignment in stretch_assignments)
+        assert not any("bent" in assignment for assignment in stretch_assignments)
+        assert not any("N=O" in assignment for assignment in stretch_assignments)
 
 
 # 9. Range search

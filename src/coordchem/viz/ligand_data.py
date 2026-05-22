@@ -21,7 +21,7 @@ LIGAND_SMILES: dict[str, str] = {
     "CN": "[C-]#N",
     "NC": "N#[C-]",
     "CO": "[C-]#[O+]",
-    "NO": "[N]=O",
+    "NO": "[N+]=O",
     "NO2": "O=N[O-]",
     "ONO": "[O-]N=O",
     "SCN": "[S-]C#N",

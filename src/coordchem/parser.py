@@ -17,7 +17,7 @@ KNOWN_LIGANDS: dict[str, tuple[str, int, int, str]] = {
     "CN"            : ("cyano",                 -1,    1,      "C"),
     "NC"            : ("isocyano",              -1,    1,      "N"),
     "CO"            : ("carbonyl",                 0,    1,      "C"),
-    "NO"            : ("nitrosyl",                 0,    1,      "N"),
+    "NO"            : ("nitrosyl",                 1,    1,      "N"),
     "Cl"            : ("chloro",                -1,    1,      "Cl"),
     "Br"            : ("bromo",                 -1,    1,      "Br"),
     "I"             : ("iodo",                  -1,    1,      "I"),
