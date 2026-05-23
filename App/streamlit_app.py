@@ -173,10 +173,16 @@ def dmso_assignment_note(parsed) -> str | None:
     return None
 
 
-def _plot_block(result, label, sigma, user_input, invert=False):
+def _plot_block(result, label, sigma, user_input, display_mode="Absorbance"):
     if result.bands:
         st.plotly_chart(
-            plot_spectrum(result.bands, result.intensities, f"{label} — {user_input}", sigma, invert=invert),
+            plot_spectrum(
+                result.bands,
+                result.intensities,
+                f"{label} — {user_input}",
+                sigma,
+                display_mode=display_mode,
+            ),
             use_container_width=True,
         )
     else:
@@ -220,9 +226,23 @@ with st.sidebar:
     spectrum_type = st.radio("Spectrum type", ["IR", "Raman", "Both"], index=2, horizontal=True)
     sigma         = st.slider("Peak width σ (cm⁻¹)", min_value=5, max_value=60, value=20, step=5)
     if spectrum_type in ("IR", "Both"):
-        invert    = st.checkbox("Transmittance style (downward peaks)", value=False, key="invert_ir")
+        if hasattr(st, "segmented_control"):
+            ir_display_mode = st.segmented_control(
+                "IR display",
+                ["Absorbance", "Transmittance"],
+                default="Absorbance",
+                key="ir_display_mode",
+            )
+        else:
+            ir_display_mode = st.radio(
+                "IR display",
+                ["Absorbance", "Transmittance"],
+                index=0,
+                horizontal=True,
+                key="ir_display_mode",
+            )
     else:
-        invert    = False
+        ir_display_mode = "Absorbance"
     st.caption("**Supported ligands** : CN, NC, CO, NO, Cl, Br, I, F, OH, O, S, NH3, " \
     "H2O, NO2, ONO, SCN, NCS, N3, en, phen, bipy, ox, acac, " \
     "EDTA, Cp, tpy, py, dmso/DMSO, PPh3, PMe3, PEt3, CH3, H.")
@@ -350,13 +370,13 @@ st.subheader("Predicted Spectra")
 if spectrum_type == "Both":
     col_ir, col_ra = st.columns(2)
     with col_ir:
-        _plot_block(ir_result,    "IR",    sigma, user_input, invert=invert)
+        _plot_block(ir_result,    "IR",    sigma, user_input, display_mode=ir_display_mode)
     with col_ra:
-        _plot_block(raman_result, "Raman", sigma, user_input, invert=False)
+        _plot_block(raman_result, "Raman", sigma, user_input, display_mode="Intensity")
 elif want_ir:
-    _plot_block(ir_result,    "IR",    sigma, user_input, invert=invert)
+    _plot_block(ir_result,    "IR",    sigma, user_input, display_mode=ir_display_mode)
 else:
-    _plot_block(raman_result, "Raman", sigma, user_input, invert=False)
+    _plot_block(raman_result, "Raman", sigma, user_input, display_mode="Intensity")
 
 # Band assignments
 st.subheader("Band Assignments")

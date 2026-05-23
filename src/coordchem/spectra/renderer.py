@@ -22,20 +22,30 @@ def build_spectrum(bands, intensities, sigma=20.0, wn_range=(100, 4000)):
         y /= y.max()
     return x, y
 
-def plot_spectrum(bands, intensities, title, sigma, invert=False):
+def plot_spectrum(bands, intensities, title, sigma, invert=False, display_mode=None):
     x, y = build_spectrum(bands, intensities, sigma=sigma)
 
-    if invert:
-        y       = 1 - y
-        y_range = [-0.08, 1.0]
-        y_label = "Transmittance"
+    if display_mode is None:
+        display_mode = "Transmittance" if invert else "Absorbance"
+
+    display_mode = str(display_mode).strip().lower()
+    show_transmittance = display_mode == "transmittance"
+    show_intensity = display_mode == "intensity"
+
+    if show_transmittance:
+        y       = 100 * (1 - y)
+        y_range = [-8, 108]
+        y_label = "Transmittance (%)"
+    elif show_intensity:
+        y_range = [0, 1.08]
+        y_label = "Intensity (a.u.)"
     else:
         y_range = [0, 1.08]
         y_label = "Absorbance (a.u.)"
 
     fig = go.Figure()
 
-    if invert:
+    if show_transmittance:
         # Transmittance : no fill
         fig.add_trace(go.Scatter(
             x=x, y=y,
