@@ -136,25 +136,30 @@ def square_antiprismatic_positions(distance: float = 2.0) -> list[Position]:
 
 
 def dodecahedral_positions(distance: float = 2.0) -> list[Position]:
-    """Return eight approximate positions for a dodecahedral CN=8 geometry."""
+    """Return eight approximate positions for a dodecahedral CN=8 geometry.
+
+    This represents the coordination-chemistry triangular dodecahedron
+    (D2d-like), not a regular carbon-style dodecahedron.  The sites are
+    arranged in two unequal z levels on each side of the metal so it stays
+    visually distinct from the two parallel squares of a square antiprism.
+    """
     import math
 
-    z1 = distance * 0.75
-    z2 = distance * 0.25
+    z_high = distance * 0.72
+    z_low = distance * 0.30
 
-    r1 = (distance**2 - z1**2) ** 0.5
-    r2 = (distance**2 - z2**2) ** 0.5
+    r_high = math.sqrt(distance**2 - z_high**2)
+    r_low = math.sqrt(distance**2 - z_low**2)
 
     return [
-        ( r1,  0.0,  z1),
-        ( 0.0,  r1,  z1),
-        (-r1,  0.0,  z1),
-        ( 0.0, -r1,  z1),
-
-        ( r2,  r2, -z2),
-        (-r2,  r2, -z2),
-        (-r2, -r2, -z2),
-        ( r2, -r2, -z2),
+        ( r_high,  0.0,     z_high),
+        ( 0.0,     r_low,   z_low),
+        (-r_high,  0.0,     z_high),
+        ( 0.0,    -r_low,   z_low),
+        ( 0.0,    -r_high, -z_high),
+        ( r_low,   0.0,    -z_low),
+        ( 0.0,     r_high, -z_high),
+        (-r_low,   0.0,    -z_low),
     ]
 def pentagonal_bipyramidal_positions(distance: float = 2.0) -> list[Position]:
     """Return seven positions: five equatorial + two axial."""
@@ -264,16 +269,32 @@ def bidentate_site_pair_indices(
 
     normalized = (geometry or "").lower()
 
+    if "pentagonal bipyramidal" in normalized and n_sites >= 7:
+        return [
+            (0, 1),
+            (2, 3),
+            (3, 4),
+            (4, 0),
+            (1, 2),
+            (4, 5),
+            (5, 2),
+            (6, 1),
+            (6, 3),
+        ]
+
+    if "capped octahedral" in normalized and n_sites >= 7:
+        return [(0, 2), (1, 4), (3, 5), (0, 6), (2, 6), (4, 6)]
+
     if "octahedral" in normalized and n_sites >= 6:
         return [(0, 2), (1, 4), (3, 5)]
 
     if "square planar" in normalized and n_sites >= 4:
         return [(0, 2), (1, 3)]
 
-    if "pentagonal bipyramidal" in normalized and n_sites >= 7:
-        return [(3, 4), (5, 6), (2, 3), (6, 2)]
-
     if "square antiprismatic" in normalized and n_sites >= 8:
+        return [(0, 1), (2, 3), (4, 5), (6, 7)]
+
+    if "dodecahedral" in normalized and n_sites >= 8:
         return [(0, 1), (2, 3), (4, 5), (6, 7)]
 
     return [(i, i + 1) for i in range(0, n_sites - 1, 2)]
@@ -745,20 +766,12 @@ def methyl_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, spre
         if atom.GetSymbol() == "H"
     ]
 
-    import math
-
-    for i, h_idx in enumerate(h_indices[:3]):
-        angle = 2 * math.pi * i / 3
-
-        radial = vec_add(
-            vec_scale(u, math.cos(angle) * spread),
-            vec_scale(v, math.sin(angle) * spread),
-        )
-
-        outward = vec_scale(direction, 0.4)
-
-        h_pos = vec_add(center, vec_add(radial, outward))
-        coords[h_idx] = h_pos
+    ch_length = 1.09
+    for h_idx, h_direction in zip(
+        h_indices[:3],
+        _tetrahedral_substituent_directions(direction, u, v),
+    ):
+        coords[h_idx] = vec_add(center, vec_scale(h_direction, ch_length))
 
     for atom in ligand_mol.GetAtoms():
         idx = atom.GetIdx()
@@ -787,20 +800,12 @@ def ammonia_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, spr
         if atom.GetSymbol() == "H"
     ]
 
-    import math
-
-    for i, h_idx in enumerate(h_indices[:3]):
-        angle = 2 * math.pi * i / 3
-
-        radial = vec_add(
-            vec_scale(u, math.cos(angle) * spread),
-            vec_scale(v, math.sin(angle) * spread),
-        )
-
-        outward = vec_scale(direction, 0.4)
-
-        h_pos = vec_add(center, vec_add(radial, outward))
-        coords[h_idx] = h_pos
+    nh_length = 1.01
+    for h_idx, h_direction in zip(
+        h_indices[:3],
+        _tetrahedral_substituent_directions(direction, u, v),
+    ):
+        coords[h_idx] = vec_add(center, vec_scale(h_direction, nh_length))
 
     for atom in ligand_mol.GetAtoms():
         idx = atom.GetIdx()
@@ -813,7 +818,8 @@ def ammonia_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, spr
 def pyridine_ligand_positions(ligand_mol, donor_idx_local,target,ligand_number=0):
     direction = unit(target)
 
-    center = target
+    metal_n_length = max(norm(target), 3.0)
+    center = vec_scale(direction, metal_n_length)
     coords = {}
     coords[donor_idx_local] = center
 
@@ -824,26 +830,25 @@ def pyridine_ligand_positions(ligand_mol, donor_idx_local,target,ligand_number=0
 
     u = unit(cross(direction, ref))
     v = unit(cross(direction, u))
-    ring_radius=0.75
-    outward_distance=1.3
-    angle_offset=ligand_number*0.7
-    all_heavy_atoms = [
-        atom.GetIdx()
-        for atom in ligand_mol.GetAtoms()
-        if atom.GetSymbol() != "H"
-    ]
-    heavy_atoms = [donor_idx_local] + [
-    idx for idx in all_heavy_atoms
-    if idx != donor_idx_local
-]
-    ring_center=vec_add(target,vec_scale(direction, ring_radius))
-    coords[donor_idx_local]=target
+    aromatic_bond_length = 1.39
+    ch_length = 1.09
+    ring = next(
+        (
+            ring
+            for ring in ligand_mol.GetRingInfo().AtomRings()
+            if donor_idx_local in ring and len(ring) == 6
+        ),
+        (),
+    )
+    heavy_atoms = _ordered_ring_from_anchor(ligand_mol, ring, donor_idx_local)
+    ring_center=vec_add(center,vec_scale(direction, aromatic_bond_length))
+    coords[donor_idx_local]=center
     angles=[math.pi, 2*math.pi/3, math.pi/3,0.0,-math.pi/3,-2*math.pi/3]
 
     for idx, angle in zip(heavy_atoms, angles):
         ring_pos = vec_add(
-                vec_scale(direction, math.cos(angle) * ring_radius),
-                vec_scale(u, math.sin(angle) * ring_radius))
+                vec_scale(direction, math.cos(angle) * aromatic_bond_length),
+                vec_scale(u, math.sin(angle) * aromatic_bond_length))
         coords[idx] = vec_add(ring_center, ring_pos)
     for atom in ligand_mol.GetAtoms():
         idx=atom.GetIdx()
@@ -853,11 +858,11 @@ def pyridine_ligand_positions(ligand_mol, donor_idx_local,target,ligand_number=0
             neighbors = atom.GetNeighbors()
             if neighbors:
                 heavy_idx = neighbors[0].GetIdx()
-                base = coords.get(heavy_idx, target)
+                base = coords.get(heavy_idx, center)
                 outward=unit(vec_sub(base, ring_center))
-                coords[idx]=vec_add(base, vec_scale(outward,0.45))
+                coords[idx]=vec_add(base, vec_scale(outward,ch_length))
             else:
-                coords[idx]=target
+                coords[idx]=center
     return coords
 
 
@@ -949,6 +954,56 @@ def _place_methylene_hydrogens(coords, ligand_mol, carbon_idx, heavy_indices):
     )
     for h_idx, h_direction in zip(h_indices, h_dirs):
         coords[h_idx] = vec_add(carbon_pos, vec_scale(unit(h_direction), ch_length))
+
+
+def _place_two_tetrahedral_hydrogens(
+    coords,
+    ligand_mol,
+    parent_idx,
+    heavy_positions,
+    bond_length,
+):
+    """Place two H atoms around a parent with two fixed heavy substituents."""
+    parent_pos = coords[parent_idx]
+    heavy_dirs = [unit(vec_sub(position, parent_pos)) for position in heavy_positions]
+    if len(heavy_dirs) < 2:
+        return
+
+    h_indices = [
+        neighbor.GetIdx()
+        for neighbor in ligand_mol.GetAtomWithIdx(parent_idx).GetNeighbors()
+        if neighbor.GetSymbol() == "H"
+    ]
+    if len(h_indices) < 2:
+        return
+
+    heavy_sum = vec_add(heavy_dirs[0], heavy_dirs[1])
+    if norm(heavy_sum) <= 1e-8:
+        bisector = _perpendicular_unit(heavy_dirs[0], (0.0, 0.0, 1.0))
+        bisector_component = 0.0
+    else:
+        bisector = unit(vec_scale(heavy_sum, -1.0))
+        bisector_component = max(-1.0, min(1.0, norm(heavy_sum) / 2.0))
+
+    normal = cross(heavy_dirs[0], heavy_dirs[1])
+    if norm(normal) <= 1e-8:
+        normal = _perpendicular_unit(bisector, (0.0, 0.0, 1.0))
+    normal = unit(normal)
+    normal_component = max(0.0, 1.0 - bisector_component * bisector_component) ** 0.5
+
+    h_dirs = (
+        vec_add(
+            vec_scale(bisector, bisector_component),
+            vec_scale(normal, normal_component),
+        ),
+        vec_add(
+            vec_scale(bisector, bisector_component),
+            vec_scale(normal, -normal_component),
+        ),
+    )
+
+    for h_idx, h_direction in zip(h_indices[:2], h_dirs):
+        coords[h_idx] = vec_add(parent_pos, vec_scale(unit(h_direction), bond_length))
 
 
 def trimethyl_ligand_positions(ligand_mol, donor_idx, target, nh_distance=1.0, spread=0.8):
@@ -1436,20 +1491,53 @@ def ethylenediamine_ligand_positions(ligand_mol, donor_indices, target_sites):
         c1_idx = c1_candidates[0]
         c2_idx = c2_candidates[0]
 
+        nc_length = 1.47
+        cc_length = 1.53
+        half_nn = norm(vec_sub(n2_pos, n1_pos)) / 2
+        half_cc = cc_length / 2
+        axis_offset = half_cc
+        axial_nc_component = half_nn - axis_offset
+        if abs(axial_nc_component) >= nc_length:
+            axis_offset = max(0.2, half_nn - nc_length * 0.85)
+            axial_nc_component = half_nn - axis_offset
+            cc_length = 2 * axis_offset
+
+        outward_offset = max(
+            0.2,
+            (nc_length * nc_length - axial_nc_component * axial_nc_component) ** 0.5,
+        )
+
         coords[c1_idx] = vec_add(
             mid,
             vec_add(
-                vec_scale(axis, -0.45),
-                vec_scale(outward, 1.2),
+                vec_scale(axis, -axis_offset),
+                vec_scale(outward, outward_offset),
             ),
         )
 
         coords[c2_idx] = vec_add(
             mid,
             vec_add(
-                vec_scale(axis, 0.45),
-                vec_scale(outward, 1.2),
+                vec_scale(axis, axis_offset),
+                vec_scale(outward, outward_offset),
             ),
+        )
+
+        _place_methylene_hydrogens(coords, ligand_mol, c1_idx, [n1_idx, c2_idx])
+        _place_methylene_hydrogens(coords, ligand_mol, c2_idx, [c1_idx, n2_idx])
+        _place_two_tetrahedral_hydrogens(
+            coords,
+            ligand_mol,
+            n1_idx,
+            [(0.0, 0.0, 0.0), coords[c1_idx]],
+            1.01,
+        )
+        _place_two_tetrahedral_hydrogens(
+            coords,
+            ligand_mol,
+            n2_idx,
+            [(0.0, 0.0, 0.0), coords[c2_idx]],
+            1.01,
         )
 
     for atom in ligand_mol.GetAtoms():
@@ -1471,8 +1559,8 @@ def ethylenediamine_ligand_positions(ligand_mol, donor_indices, target_sites):
                 coords[idx] = vec_add(
                     base,
                     vec_add(
-                        vec_scale(h_out, 0.35),
-                        vec_scale(side, 0.25 if idx % 2 == 0 else -0.25),
+                        vec_scale(h_out, 0.8),
+                        vec_scale(side, 0.45 if idx % 2 == 0 else -0.45),
                     ),
                 )
             else:
@@ -1993,7 +2081,8 @@ def cyclopentadienyl_ligand_positions(ligand_mol,target,ligand_number=0):
     v = unit(cross(direction, u))
 
     coords = {}
-    ring_center=target
+    metal_cp_length = max(norm(target), 3.0)
+    ring_center=vec_scale(direction, metal_cp_length)
 
     c_indices = [
         atom.GetIdx()
@@ -2005,7 +2094,9 @@ def cyclopentadienyl_ligand_positions(ligand_mol,target,ligand_number=0):
         if atom.GetSymbol() == "H"]
     
     angle_offset = ligand_number * math.pi / 5
-    ring_radius = 0.85
+    aromatic_cc_length = 1.40
+    ch_length = 1.09
+    ring_radius = aromatic_cc_length / (2.0 * math.sin(math.pi / 5.0))
 
     for i, c_idx in enumerate(c_indices[:5]):
         angle = angle_offset + 2 * math.pi * i / 5
@@ -2026,7 +2117,7 @@ def cyclopentadienyl_ligand_positions(ligand_mol,target,ligand_number=0):
             base = coords.get(c_idx, ring_center)
 
             outward = unit(vec_sub(base, ring_center))
-            coords[h_idx] = vec_add(base, vec_scale(outward, 0.45))
+            coords[h_idx] = vec_add(base, vec_scale(outward, ch_length))
         else:
             coords[h_idx] = ring_center
 
