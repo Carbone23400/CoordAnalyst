@@ -738,11 +738,11 @@ def test_cn5_trigonal_bipyramidal_projection_has_axial_and_equatorial_sites():
             pos = conf.GetAtomPosition(other)
             sites.append((str(bond.GetBondDir()), round(pos.x, 2), round(pos.y, 2)))
 
-    assert ("NONE", -3.2, 0.0) in sites
+    assert ("NONE", 3.2, 0.0) in sites
     assert ("NONE", 0.0, 3.2) in sites
     assert ("NONE", 0.0, -3.2) in sites
-    assert ("BEGINDASH", 2.6, 1.8) in sites
-    assert ("BEGINWEDGE", 2.6, -1.8) in sites
+    assert ("BEGINDASH", -2.6, 1.8) in sites
+    assert ("BEGINWEDGE", -2.6, -1.8) in sites
 
 
 def test_cn8_square_antiprismatic_projection_uses_staggered_styled_squares():
@@ -770,6 +770,31 @@ def test_cn8_square_antiprismatic_projection_uses_staggered_styled_squares():
     }
 
     assert set(sites) == expected_top_square | expected_bottom_square
+
+
+def test_cn8_dodecahedral_projection_uses_depth_styled_d2d_sites():
+    mol = build_coordination_mol("[TaF8]3-", geometry_override="dodecahedral")
+    conf = mol.GetConformer()
+
+    sites = []
+    for bond in mol.GetBonds():
+        if 0 in {bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()}:
+            other = bond.GetOtherAtomIdx(0)
+            pos = conf.GetAtomPosition(other)
+            sites.append((str(bond.GetBondDir()), round(pos.x, 2), round(pos.y, 2)))
+
+    expected_sites = {
+        ("BEGINDASH", -2.85, 1.15),
+        ("NONE", -0.85, 2.75),
+        ("NONE", 0.85, 2.75),
+        ("BEGINDASH", 2.85, 1.15),
+        ("BEGINWEDGE", 2.85, -1.15),
+        ("NONE", 0.85, -2.75),
+        ("NONE", -0.85, -2.75),
+        ("BEGINWEDGE", -2.85, -1.15),
+    }
+
+    assert set(sites) == expected_sites
 
 
 def test_cn8_square_antiprismatic_keeps_compact_cyano_labels_carbon_side():

@@ -76,6 +76,20 @@ def _square_antiprismatic_sites(n_sites: int) -> list[Site]:
     ][:n_sites]
 
 
+def _dodecahedral_sites(n_sites: int) -> list[Site]:
+    """Return a D2d-like projection for dodecahedral CN=8."""
+    return [
+        Site(-2.85, 1.15, "dash"),
+        Site(-0.85, 2.75, "plain"),
+        Site(0.85, 2.75, "plain"),
+        Site(2.85, 1.15, "dash"),
+        Site(2.85, -1.15, "wedge"),
+        Site(0.85, -2.75, "plain"),
+        Site(-0.85, -2.75, "plain"),
+        Site(-2.85, -1.15, "wedge"),
+    ][:n_sites]
+
+
 def _pentagonal_bipyramidal_sites(n_sites: int) -> list[Site]:
     """Return a styled pentagonal-bipyramidal projection for CN=7."""
     return [
@@ -127,9 +141,9 @@ def coordination_sites(geometry: str, n_sites: int) -> list[Site]:
         return [
             Site(0.0, -3.2, "plain"),
             Site(0.0, 3.2, "plain"),
-            Site(-3.2, 0.0, "plain"),
-            Site(2.6, 1.8, "dash"),
-            Site(2.6, -1.8, "wedge"),
+            Site(3.2, 0.0, "plain"),
+            Site(-2.6, 1.8, "dash"),
+            Site(-2.6, -1.8, "wedge"),
         ][:n_sites]
 
     if "square pyramidal" in g:
@@ -149,6 +163,9 @@ def coordination_sites(geometry: str, n_sites: int) -> list[Site]:
 
     if "square antiprismatic" in g:
         return _square_antiprismatic_sites(n_sites)
+
+    if "dodecahedral" in g:
+        return _dodecahedral_sites(n_sites)
 
     return regular_polygon_sites(n_sites)
 
