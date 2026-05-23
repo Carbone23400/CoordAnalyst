@@ -18,13 +18,17 @@ from rdkit import Chem  # noqa: E402
 from coordchem.complex import Complex  # noqa: E402
 from coordchem.parser import KNOWN_LIGANDS, parse_formula  # noqa: E402
 from coordchem.viz.molecule3D import (  # noqa: E402
+    _cp_ring_centers,
     bidentate_site_pair_indices,
     build_complex_3d,
     build_ligand_3d,
+    capped_octahedral_positions,
+    dodecahedral_positions,
     find_donor_atom,
     geometry_positions,
     octahedral_positions,
     parse_complex_input,
+    pentagonal_bipyramidal_positions,
     view_complex_3d,
 )
 from coordchem.viz.ligand_data import LIGAND_SMILES  # noqa: E402
@@ -57,13 +61,58 @@ class TestGeometryPositions:
         assert len(pos) == 8
         assert all(any(abs(component) > 0 for component in site) for site in pos)
 
+    def test_dodecahedral_positions_are_not_flat_octagon_or_antiprism(self):
+        pos = dodecahedral_positions(distance=2.0)
+
+        assert len(pos) == 8
+        assert all(
+            math.dist((0.0, 0.0, 0.0), site) == pytest.approx(2.0)
+            for site in pos
+        )
+        assert len({round(site[2], 2) for site in pos}) == 4
+
+    def test_geometry_positions_explicit_dodecahedral(self):
+        pos = geometry_positions("dodecahedral", 8)
+
+        assert pos == dodecahedral_positions()
+
+    def test_short_bidentate_dodecahedral_pairs_are_adjacent(self):
+        pairs = bidentate_site_pair_indices("dodecahedral", 8)
+        pos = dodecahedral_positions(distance=2.0)
+        paired_distances = [math.dist(pos[a], pos[b]) for a, b in pairs]
+
+        assert pairs == [(0, 1), (2, 3), (4, 5), (6, 7)]
+        assert all(distance < 2.6 for distance in paired_distances)
+
     def test_short_bidentate_square_planar_pairs_are_cis(self):
         pairs = bidentate_site_pair_indices("square planar", 4)
         assert pairs == [(0, 2), (1, 3)]
 
     def test_short_bidentate_pentagonal_bipyramidal_pairs_are_equatorial(self):
         pairs = bidentate_site_pair_indices("pentagonal bipyramidal", 7)
-        assert pairs[:2] == [(3, 4), (5, 6)]
+        pos = pentagonal_bipyramidal_positions(distance=2.0)
+        paired_distances = [math.dist(pos[a], pos[b]) for a, b in pairs[:5]]
+
+        assert pairs[:5] == [(0, 1), (2, 3), (3, 4), (4, 0), (1, 2)]
+        assert all(distance == pytest.approx(2.35, abs=0.01) for distance in paired_distances)
+
+    def test_short_bidentate_cn7_ambiguous_label_uses_pentagonal_pairs(self):
+        geometry = "pentagonal bipyramidal or capped octahedral"
+        pairs = bidentate_site_pair_indices(geometry, 7)
+        pos = geometry_positions(geometry, 7)
+        paired_distances = [math.dist(pos[a], pos[b]) for a, b in pairs[:2]]
+
+        assert pos == pentagonal_bipyramidal_positions()
+        assert pairs[:2] == [(0, 1), (2, 3)]
+        assert all(distance == pytest.approx(2.35, abs=0.01) for distance in paired_distances)
+
+    def test_short_bidentate_capped_octahedral_pairs_are_edges_not_trans(self):
+        pairs = bidentate_site_pair_indices("capped octahedral", 7)
+        pos = capped_octahedral_positions(distance=2.0)
+        paired_distances = [math.dist(pos[a], pos[b]) for a, b in pairs]
+
+        assert pairs[:3] == [(0, 2), (1, 4), (3, 5)]
+        assert all(distance < 3.1 for distance in paired_distances)
 
 
 class TestBuildLigand:
@@ -188,6 +237,81 @@ class TestBuildComplex:
                 if neighbor.GetSymbol() == "H"
             ) == 3
             for atom in methyl_carbons
+        )
+
+    def test_methyl_3d_uses_realistic_tetrahedral_ch_geometry(self):
+        mol = build_complex_3d(parse_formula("[Ti(CH3)4]"))
+
+        ch_lengths = _bond_lengths_for_symbols(mol, {"C", "H"})
+        hch_angles = _center_angles_matching_neighbors(
+            mol,
+            center_symbol="C",
+            neighbor_symbols=("H", "H"),
+        )
+        metal_c_h_angles = _center_angles_matching_neighbors(
+            mol,
+            center_symbol="C",
+            neighbor_symbols=("Ti", "H"),
+        )
+
+        assert len(ch_lengths) == 12
+        assert all(length == pytest.approx(1.09, abs=0.03) for length in ch_lengths)
+        assert len(hch_angles) == 12
+        assert len(metal_c_h_angles) == 12
+        assert all(angle == pytest.approx(109.47, abs=0.5) for angle in hch_angles)
+        assert all(
+            angle == pytest.approx(109.47, abs=0.5)
+            for angle in metal_c_h_angles
+        )
+
+    def test_ammine_3d_uses_realistic_tetrahedral_nh_geometry(self):
+        mol = build_complex_3d(parse_formula("[Co(NH3)6]3+"))
+
+        nh_lengths = _bond_lengths_for_symbols(mol, {"N", "H"})
+        hnh_angles = _center_angles_matching_neighbors(
+            mol,
+            center_symbol="N",
+            neighbor_symbols=("H", "H"),
+        )
+        metal_n_h_angles = _center_angles_matching_neighbors(
+            mol,
+            center_symbol="N",
+            neighbor_symbols=("Co", "H"),
+        )
+
+        assert len(nh_lengths) == 18
+        assert all(length == pytest.approx(1.01, abs=0.03) for length in nh_lengths)
+        assert len(hnh_angles) == 18
+        assert len(metal_n_h_angles) == 18
+        assert all(angle == pytest.approx(109.47, abs=0.5) for angle in hnh_angles)
+        assert all(
+            angle == pytest.approx(109.47, abs=0.5)
+            for angle in metal_n_h_angles
+        )
+
+    def test_pyridine_3d_uses_realistic_aromatic_ring_lengths(self):
+        mol = build_complex_3d(parse_formula("[Co(py)6]3+"))
+
+        cc_lengths = _bond_lengths_for_symbols(mol, {"C"})
+        cn_lengths = _bond_lengths_for_symbols(mol, {"C", "N"})
+        ch_lengths = _bond_lengths_for_symbols(mol, {"C", "H"})
+
+        assert len(cc_lengths) == 24
+        assert len(cn_lengths) == 12
+        assert len(ch_lengths) == 30
+        assert all(length == pytest.approx(1.39, abs=0.03) for length in cc_lengths)
+        assert all(length == pytest.approx(1.39, abs=0.03) for length in cn_lengths)
+        assert all(length == pytest.approx(1.09, abs=0.03) for length in ch_lengths)
+
+    def test_pyridine_3d_uses_longer_metal_nitrogen_bonds(self):
+        mol = build_complex_3d(parse_formula("[Co(py)6]3+"))
+
+        metal_n_lengths = _metal_donor_bond_lengths(mol, donor_symbol="N")
+
+        assert len(metal_n_lengths) == 6
+        assert all(
+            length == pytest.approx(3.0, abs=0.03)
+            for length in metal_n_lengths
         )
 
     def test_acac_3d_oxygen_donors_have_no_hydrogen_neighbor(self):
@@ -641,6 +765,35 @@ class TestBuildComplex:
         assert len(hch_angles) == 6
         assert all(angle == pytest.approx(109.47, abs=0.5) for angle in hch_angles)
 
+    def test_ethylenediamine_3d_uses_realistic_sp3_chain(self):
+        mol = build_complex_3d(parse_formula("[Co(en)3]3+"))
+
+        nc_lengths = _bond_lengths_for_symbols(mol, {"N", "C"})
+        cc_lengths = _bond_lengths_for_symbols(mol, {"C"})
+        nh_lengths = _bond_lengths_for_symbols(mol, {"N", "H"})
+        ch_lengths = _bond_lengths_for_symbols(mol, {"C", "H"})
+        metal_n_c_angles = _center_angles_matching_neighbors(
+            mol,
+            center_symbol="N",
+            neighbor_symbols=("Co", "C"),
+        )
+        hch_angles = _carbon_hydrogen_hydrogen_angles(mol)
+
+        assert len(nc_lengths) == 6
+        assert len(cc_lengths) == 3
+        assert len(nh_lengths) == 12
+        assert len(ch_lengths) == 12
+        assert all(length == pytest.approx(1.47, abs=0.03) for length in nc_lengths)
+        assert all(length == pytest.approx(1.53, abs=0.03) for length in cc_lengths)
+        assert all(length == pytest.approx(1.01, abs=0.03) for length in nh_lengths)
+        assert all(length == pytest.approx(1.09, abs=0.03) for length in ch_lengths)
+        assert len(metal_n_c_angles) == 6
+        assert all(
+            angle == pytest.approx(109.5, abs=2.0)
+            for angle in metal_n_c_angles
+        )
+        assert all(angle == pytest.approx(109.5, abs=1.0) for angle in hch_angles)
+
     def test_cp_3d_uses_no_dummy_atom_or_artificial_metal_carbon_bonds(self):
         parsed = parse_formula("[Co(Cp)6]")
         mol = build_complex_3d(parsed)
@@ -655,6 +808,31 @@ class TestBuildComplex:
                 and mol.GetAtomWithIdx(bond.GetOtherAtomIdx(0)).GetSymbol() == "C"
             ]
         ) == 0
+
+    def test_cp_3d_uses_realistic_aromatic_ring_lengths(self):
+        mol = build_complex_3d(parse_formula("[Co(Cp)6]"))
+
+        cc_lengths = _bond_lengths_for_symbols(mol, {"C"})
+        ch_lengths = _bond_lengths_for_symbols(mol, {"C", "H"})
+
+        assert len(cc_lengths) == 30
+        assert len(ch_lengths) == 30
+        assert all(length == pytest.approx(1.40, abs=0.03) for length in cc_lengths)
+        assert all(length == pytest.approx(1.09, abs=0.03) for length in ch_lengths)
+
+    def test_cp_3d_uses_longer_metal_ring_center_distance(self):
+        mol = build_complex_3d(parse_formula("[Co(Cp)6]"))
+
+        ring_center_distances = [
+            math.dist((0.0, 0.0, 0.0), center)
+            for center in _cp_ring_centers(mol)
+        ]
+
+        assert len(ring_center_distances) == 6
+        assert all(
+            distance == pytest.approx(3.0, abs=0.03)
+            for distance in ring_center_distances
+        )
 
     def test_cp_3d_view_draws_dashed_lines_to_ring_centers(self):
         pytest.importorskip("py3Dmol")
