@@ -16,10 +16,6 @@ from coordchem.name import parse_name
 Position = Tuple[float, float, float]
 
 
-# ---------------------------------------------------------------------------
-# Geometry placeholders
-# ---------------------------------------------------------------------------
-
 def octahedral_positions(distance: float = 2.0) -> list[Position]:
     """Return six orthogonal positions on the +/- x, y, z axes."""
     return [
@@ -136,13 +132,7 @@ def square_antiprismatic_positions(distance: float = 2.0) -> list[Position]:
 
 
 def dodecahedral_positions(distance: float = 2.0) -> list[Position]:
-    """Return eight approximate positions for a dodecahedral CN=8 geometry.
-
-    This represents the coordination-chemistry triangular dodecahedron
-    (D2d-like), not a regular carbon-style dodecahedron.  The sites are
-    arranged in two unequal z levels on each side of the metal so it stays
-    visually distinct from the two parallel squares of a square antiprism.
-    """
+    "Return eight approximate positions for a dodecahedral CN=8 geometry,D2d symmetry."
     import math
 
     z_high = distance * 0.72
@@ -203,11 +193,7 @@ def square_pyramidal_positions(distance: float = 2.0) -> list[Position]:
         ( 0.0,  0.0, distance),
     ]
 
-# Mapping from geometry label (as produced by ``coordchem.geometry``) to
-# the corresponding position generator. ``geometry_positions`` does a
-# best-effort lookup so that ambiguous labels like
-# "trigonal bipyramidal or square pyramidal" still produce something
-# reasonable.
+
 _GEOMETRY_BUILDERS = {
     "linear": linear_positions,
     "trigonal planar": trigonal_planar_positions,
@@ -231,13 +217,7 @@ def geometry_positions(
     n: int,
     distance: float = 2.0,
 ) -> list[Position]:
-    """
-    Return ``n`` coordination-site positions matching ``geometry``.
-
-    Falls back to an octahedral arrangement (truncated/extended to ``n``)
-    when the geometry label is unknown — useful as a TODO placeholder for
-    geometries we have not implemented yet.
-    """
+    "Return n coordination-site positions matching ``geometry``. "
     if geometry:
         for label, builder in _GEOMETRY_BUILDERS.items():
             if label in geometry.lower():
@@ -248,14 +228,11 @@ def geometry_positions(
                 extra = octahedral_positions(distance)[: n - len(positions)]
                 return positions + extra
 
-    # if the geometry is unknown the octahedral one is adopted by default. 
-    # For n ligands, if n is < to the number of ligand in the octahedral complex only the n first positions are attributed. 
     base = octahedral_positions(distance)
     if n <= len(base):
         return base[:n]
     return base + [(0.0, 0.0, 0.0)] * (n - len(base))
-    #if n > o the number of ligand in the octahedral complex the 2 extra ligands fall in the center (0.0, 0.0, 0.0)
-
+    
 
 def bidentate_site_pair_indices(
     geometry: str | None,
@@ -300,9 +277,6 @@ def bidentate_site_pair_indices(
     return [(i, i + 1) for i in range(0, n_sites - 1, 2)]
 
 
-# ---------------------------------------------------------------------------
-# Ligand-level helpers
-# ---------------------------------------------------------------------------
 
 def build_ligand_3d(smiles: str) -> Chem.Mol:
     """
@@ -1313,9 +1287,6 @@ def acac_ligand_positions(ligand_mol, donor_indices, target_sites):
     cc_sp2_length = 1.40
     c_methyl_length = 1.50
     ch_length = 1.09
-
-    # Planar beta-diketonate backbone: O-C-C-C-O.
-    # The central sp2 carbon sits at the apex of a trigonal-planar C-C-C angle.
     bridge_half_angle_drop = cc_sp2_length / 2.0
     donor_c_axis = (3.0 ** 0.5 / 2.0) * cc_sp2_length
     donor_c_axis = min(donor_c_axis, max(0.05, half_o_o - 0.05))
@@ -2129,20 +2100,7 @@ def cyclopentadienyl_ligand_positions(ligand_mol,target,ligand_number=0):
     return coords
 
 def edta_ligand_positions(ligand_mol, donor_indices, target_sites):
-    """
-    Place all atoms of an EDTA-like hexadentate ligand around a metal at origin.
-
-    donor_indices: 6 RDKit atom indices in canonical order
-        (N1, O_a, O_b, N2, O_c, O_d) per LIGAND_DONOR_INDEX_OVERRIDES["EDTA"].
-    target_sites: matching 3D coordinates (chosen by the dispatcher so that
-        each N is cis to its 2 oxygens and to the other N).
-
-    Strategy: for each carboxylate arm (M-N-CH2-C(=O)-O-M), place CH2 and the
-    carbonyl C inside the M-N-O plane with a small outward radial bulge so the
-    5-membered chelate ring closes visibly. The dangling =O extends further
-    out along the carbonyl C radial. The ethylene bridge -CH2-CH2- sits on
-    the N1-N2 mid-arc, also bulged outward.
-    """
+    " Place all atoms of an EDTA-like hexadentate ligand around a metal at origin, matching 3D coordinates."
     coords = {}
 
     for d_idx, target in zip(donor_indices, target_sites):
@@ -2189,10 +2147,7 @@ def edta_ligand_positions(ligand_mol, donor_indices, target_sites):
         arm[o_idx] = (parent_n, ch2, carbonyl_c, dangling_o)
 
     def _place_chain_in_plane(start, end, plane_out, alphas, betas):
-        # Place chain atoms in the plane (start, end, plane_out), at positions
-        # mid + axis*alpha + outward*beta. axis runs start->end; outward is
-        # plane_out re-orthogonalized against axis (so it lies in the plane and
-        # is perpendicular to start->end).
+        ' Place chain atoms in the plane (start, end, plane_out), outward is plane_out re-orthogonalized against axis '
         mid = vec_scale(vec_add(start, end), 0.5)
         axis = unit(vec_sub(end, start))
         out_proj = vec_scale(axis, dot(axis, plane_out))
@@ -2597,12 +2552,7 @@ def build_complex_3d(
 
                     site_index+=1
                     continue
-            #else:
-               # donor_idx_local = find_donor_atom(ligand_mol, donor_symbol)
-               # rw.AddBond(
-           # metal_idx, donor_idx_local + offset, Chem.BondType.DATIVE )
-               # site_index+= 1
-               # continue 
+            
             elif denticity==6 and len(donor_overrides)>=6:
 
                 if len(sites)<6:
@@ -2614,18 +2564,14 @@ def build_complex_3d(
                 
                 donor_indices = donor_overrides[:6]
                 if ligand_symbol in ("EDTA", "edta"):
-                   # Donor order from LIGAND_DONOR_INDEX_OVERRIDES["EDTA"] = (N1, O, O, N2, O, O).
-                   #  Both N donors are connected by a -CH2-CH2- bridge so they must be cis
-                   # (sites[0] = +x, sites[2] = +y), and each N's two carboxylate O donors
-                   # must also be cis to that N. The only trans pair below is O_b/O_d,
-                   # one O from each N, which forms no chelate ring.
+                 
                    target_sites = (
-                       sites[0],  # N1   -> +x
-                       sites[3],  # O_a  -> -y  (cis to N1)
-                       sites[5],  # O_b  -> -z  (cis to N1)
-                       sites[2],  # N2   -> +y  (cis to N1)
-                       sites[1],  # O_c  -> -x  (cis to N2)
-                       sites[4],  # O_d  -> +z  (cis to N2)
+                       sites[0], 
+                       sites[3],  
+                       sites[5], 
+                       sites[2], 
+                       sites[1], 
+                       sites[4],  
                    )
 
                    local_coords=edta_ligand_positions(ligand_mol,donor_indices, target_sites)
@@ -2660,7 +2606,7 @@ def build_complex_3d(
                 except ValueError:
                     continue
         
-            #monodentate case
+            #only monodentate case
             site = next_free_site()
             if site is None:
                 break
@@ -2765,10 +2711,6 @@ def diatomic_ligand_positions(ligand_mol, donor_idx, target, bond_length=1.2):
             )
     return coords
 
-
-# ---------------------------------------------------------------------------
-# Display helpers
-# ---------------------------------------------------------------------------
 
 def parse_complex_input(complex_input: str | ParsedComplex) -> ParsedComplex:
     """Accept a formula string, compound name, or already parsed complex."""
