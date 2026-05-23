@@ -48,7 +48,7 @@ KNOWN_LIGANDS: dict[str, tuple[str, int, int, str]] = {
     "PPh3"          : ("triphenylphosphine",         0,    1,      "P"),
     "PMe3"          : ("trimethylphosphine",         0,    1,      "P"),
     "PEt3"          : ("triethylphosphine",          0,    1,      "P"),
-    "CH3"           :("methyl",                     -1,     1,      "C"),
+    "CH3"           : ("methyl",                     -1,     1,      "C"),
     "H"             : ("hydrido",                   -1,     1,      "H"),
 }
 

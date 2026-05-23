@@ -530,6 +530,37 @@ SEED_BANDS = [
     ("CH3", "terminal", "any", "Raman", 2900, 2990, "strong",     "C–H stretch (CH₃)",           False, True,  "Nakamoto Vol.2 p.362"),
     ("CH3", "terminal", "any", "Raman", 1380, 1460, "medium",     "CH₃ sym. deformation",        False, True,  "Nakamoto Vol.2 p.363"),
     ("CH3", "terminal", "any", "Raman",  400,  600, "very strong","M–C stretch",                 False, True,  "Nakamoto Vol.2 p.365"),
+
+    # =========================================================================
+    # HYDRIDE  H⁻   (Nakamoto Vol.2 pp. 361–375; Crabtree "The Organometallic
+    # Chemistry of the Transition Metals", 6th ed., Wiley, 2014, pp. 35–38)
+    # =========================================================================
+    ("H", "terminal", "any", "IR",   1700, 2200, "medium",      "M–H stretch",                 True,  False, "Nakamoto Vol.2 p.362"),
+    ("H", "terminal", "any", "Raman",1700, 2200, "strong",      "M–H stretch",                 False, True,  "Nakamoto Vol.2 p.362"),
+    ("H", "terminal", "any", "IR",    700,  900, "medium",      "M–H bend",                    True,  False, "Nakamoto Vol.2 p.363"),
+    ("H", "terminal", "any", "Raman", 700,  900, "medium",      "M–H bend",                    False, True,  "Nakamoto Vol.2 p.363"),
+
+    # Metal specific — terminal M-H stretches
+    ("H", "terminal", "Fe", "IR",   1780, 1900, "medium",      "Fe–H stretch",                True,  False, "Nakamoto Vol.2 p.365"),
+    ("H", "terminal", "Fe", "Raman",1780, 1900, "strong",      "Fe–H stretch",                False, True,  "Nakamoto Vol.2 p.365"),
+    ("H", "terminal", "Co", "IR",   1900, 2000, "medium",      "Co–H stretch",                True,  False, "Nakamoto Vol.2 p.366"),
+    ("H", "terminal", "Ni", "IR",   1800, 1900, "medium",      "Ni–H stretch",                True,  False, "Nakamoto Vol.2 p.366"),
+    ("H", "terminal", "Ru", "IR",   1950, 2100, "medium",      "Ru–H stretch",                True,  False, "Nakamoto Vol.2 p.368"),
+    ("H", "terminal", "Ru", "Raman",1950, 2100, "strong",      "Ru–H stretch",                False, True,  "Nakamoto Vol.2 p.368"),
+    ("H", "terminal", "Os", "IR",   2000, 2150, "medium",      "Os–H stretch",                True,  False, "Nakamoto Vol.2 p.369"),
+    ("H", "terminal", "Rh", "IR",   2000, 2100, "medium",      "Rh–H stretch",                True,  False, "Nakamoto Vol.2 p.367"),
+    ("H", "terminal", "Ir", "IR",   2100, 2200, "medium",      "Ir–H stretch",                True,  False, "Nakamoto Vol.2 p.369"),
+    ("H", "terminal", "Ir", "Raman",2100, 2200, "strong",      "Ir–H stretch",                False, True,  "Nakamoto Vol.2 p.369"),
+    ("H", "terminal", "Pt", "IR",   2000, 2150, "medium",      "Pt–H stretch",                True,  False, "Nakamoto Vol.2 p.370"),
+    ("H", "terminal", "Pt", "Raman",2000, 2150, "very strong", "Pt–H stretch",                False, True,  "Nakamoto Vol.2 p.370"),
+    ("H", "terminal", "Mo", "IR",   1850, 1950, "medium",      "Mo–H stretch",                True,  False, "Nakamoto Vol.2 p.367"),
+    ("H", "terminal", "W",  "IR",   1900, 2000, "medium",      "W–H stretch",                 True,  False, "Nakamoto Vol.2 p.368"),
+    ("H", "terminal", "Re", "IR",   1850, 2000, "medium",      "Re–H stretch",                True,  False, "Nakamoto Vol.2 p.369"),
+    ("H", "terminal", "Mn", "IR",   1730, 1850, "medium",      "Mn–H stretch",                True,  False, "Nakamoto Vol.2 p.365"),
+
+    # Bridging hydride M-H-M — much lower frequency than terminal
+    ("H", "bridging", "any", "IR",  1000, 1300, "medium",      "M–H–M stretch (bridging)",    True,  False, "Nakamoto Vol.2 p.372"),
+    ("H", "bridging", "any", "Raman",1000,1300, "medium",      "M–H–M stretch (bridging)",    False, True,  "Nakamoto Vol.2 p.372"),
 ]
 
 
