@@ -127,20 +127,42 @@ The user is invited to first input a Formula or a Name of the coordination compl
 <figure style="text-align: center;">
   <img src="notebooks/app_display/side_bar.png" width="280">
   <figcaption>
-    <b>Figure 11.</b> Sidebar of the application, shown  with <code>[Fe(EDTA)]-</code> as input. 
+    <b>Figure 1.</b> Sidebar of the application, shown  with <code>[Fe(EDTA)]-</code> as input. 
   </figcaption>
 </figure>
      
 The interface then shows the complex identity with the name and the formula regarless of the input mode, and the metal, oxidation state, coordination number, d-electrons count and geometry. The details of the ligands are also provided.      
-![Figure 2 : display of the main complex informations](notebooks/app_display/main_edta.png)
+   
+<figure style="text-align: center;">
+  <img src="notebooks/app_display/main_edta.png" width="500">
+  <figcaption>
+    <b>Figure 2.</b> display of the main complex informations for <code>[Fe(EDTA)]-</code>. 
+  </figcaption>
+</figure>
     
 The 2D diagram and 3D interactive visualisation is then displayed. 
-![Figure 3 : display of the 2D and 3D visualisations for [Fe(EDTA)]-](notebooks/app_display/main_edta.png)
-    
+     
+<figure style="text-align: center;">
+  <img src="notebooks/app_display/edta_diag.png" width="500">
+  <figcaption>
+    <b>Figure 3.</b> display of the 2D and 3D visualisations for <code>[Fe(EDTA)]-</code>. 
+  </figcaption>
+</figure>
+     
 The predicted spectras are then showed with the corresponding band assignments to help with the understanding of the concepts. 
-![Figure 4 : display of the predicted spectra and band assignements for [Fe(EDTA)]-](notebooks/app_display/spectra_edta.png)
+            
+<figure style="text-align: center;">
+  <img src="notebooks/app_display/spectra_edta.png" width="500">
+  <figcaption>
+    <b>Figure 4.</b> display of the predicted spectra and band assignements for <code>[Fe(EDTA)]-</code>. 
+  </figcaption>
+</figure>
 
-.. _pyscaffold-notes:
+         
+        
+     
+
+_pyscaffold-notes:
 
 Note
 ====
