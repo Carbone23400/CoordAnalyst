@@ -26,7 +26,7 @@ Before installing **CoordAnalyst**, make sure you have the following:
 
 ```bash
 git clone https://github.com/Carbone23400/CoordAnalyst.git
-cd Project-Xplosion-Ba4
+cd CoordAnalyst
 ```
 
 ### Step 2 — Create a conda environment
