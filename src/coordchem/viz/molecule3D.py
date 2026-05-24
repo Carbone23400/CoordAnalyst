@@ -2064,7 +2064,9 @@ def cyclopentadienyl_ligand_positions(ligand_mol,target,ligand_number=0):
         for atom in ligand_mol.GetAtoms()
         if atom.GetSymbol() == "H"]
     
-    angle_offset = ligand_number * math.pi / 5
+    # Keeping the same local phase gives opposite Cp rings a 36 degree
+    # stagger because the ring basis flips across the metal center.
+    angle_offset = 0.0
     aromatic_cc_length = 1.40
     ch_length = 1.09
     ring_radius = aromatic_cc_length / (2.0 * math.sin(math.pi / 5.0))
@@ -2542,13 +2544,29 @@ def build_complex_3d(
                     offset = rw.GetNumAtoms()
 
                     for atom in ligand_mol.GetAtoms():
-                        global_idx = rw.AddAtom(atom)
+                        if ligand_symbol == "Cp":
+                            display_atom = Chem.Atom(atom)
+                            display_atom.SetIsAromatic(False)
+                            global_idx = rw.AddAtom(display_atom)
+                        else:
+                            global_idx = rw.AddAtom(atom)
                         coords[global_idx] = local_coords[atom.GetIdx()]
 
                     for bond in ligand_mol.GetBonds():
                         a1 = bond.GetBeginAtomIdx() + offset
                         a2 = bond.GetEndAtomIdx() + offset
-                        rw.AddBond(a1, a2, bond.GetBondType())
+                        bond_type = bond.GetBondType()
+                        if (
+                            ligand_symbol == "Cp"
+                            and ligand_mol.GetAtomWithIdx(
+                                bond.GetBeginAtomIdx()
+                            ).GetSymbol() == "C"
+                            and ligand_mol.GetAtomWithIdx(
+                                bond.GetEndAtomIdx()
+                            ).GetSymbol() == "C"
+                        ):
+                            bond_type = Chem.BondType.SINGLE
+                        rw.AddBond(a1, a2, bond_type)
 
                     site_index+=1
                     continue
@@ -2734,26 +2752,18 @@ def _to_parsed(complex_or_formula) -> ParsedComplex:
     return parse_complex_input(complex_or_formula)
 
 
-def _cp_ring_centers(mol: Chem.Mol) -> list[Position]:
-    conf = mol.GetConformer()
-    centers = []
-
+def _cp_ring_atom_groups(mol: Chem.Mol) -> list[tuple[int, ...]]:
+    """Return carbon atom groups corresponding to Cp rings."""
+    rings = []
     for ring in mol.GetRingInfo().AtomRings():
         if len(ring) != 5:
             continue
         if any(mol.GetAtomWithIdx(idx).GetSymbol() != "C" for idx in ring):
             continue
+        rings.append(tuple(ring))
 
-        centers.append(
-            (
-                sum(conf.GetAtomPosition(idx).x for idx in ring) / 5.0,
-                sum(conf.GetAtomPosition(idx).y for idx in ring) / 5.0,
-                sum(conf.GetAtomPosition(idx).z for idx in ring) / 5.0,
-            )
-        )
-
-    if centers:
-        return centers
+    if rings:
+        return rings
 
     adjacency = {idx: set() for idx in range(1, mol.GetNumAtoms())}
     for bond in mol.GetBonds():
@@ -2790,11 +2800,21 @@ def _cp_ring_centers(mol: Chem.Mol) -> list[Position]:
         if len(carbon_indices) != 5 or any(symbol != "C" for symbol in heavy_symbols):
             continue
 
+        rings.append(tuple(carbon_indices))
+
+    return rings
+
+
+def _cp_ring_centers(mol: Chem.Mol) -> list[Position]:
+    conf = mol.GetConformer()
+    centers = []
+
+    for ring in _cp_ring_atom_groups(mol):
         centers.append(
             (
-                sum(conf.GetAtomPosition(idx).x for idx in carbon_indices) / 5.0,
-                sum(conf.GetAtomPosition(idx).y for idx in carbon_indices) / 5.0,
-                sum(conf.GetAtomPosition(idx).z for idx in carbon_indices) / 5.0,
+                sum(conf.GetAtomPosition(idx).x for idx in ring) / 5.0,
+                sum(conf.GetAtomPosition(idx).y for idx in ring) / 5.0,
+                sum(conf.GetAtomPosition(idx).z for idx in ring) / 5.0,
             )
         )
 
@@ -2831,6 +2851,100 @@ def _add_dashed_line_to_view(view, start: Position, end: Position) -> None:
         )
 
 
+def _cp_inner_ring_point(
+    center: Position,
+    u: Position,
+    v: Position,
+    radius: float,
+    angle: float,
+) -> Position:
+    return vec_add(
+        center,
+        vec_add(
+            vec_scale(u, math.cos(angle) * radius),
+            vec_scale(v, math.sin(angle) * radius),
+        ),
+    )
+
+
+def _add_dashed_cp_delocalization_to_view(
+    view,
+    mol: Chem.Mol,
+    ring: Sequence[int],
+) -> None:
+    conf = mol.GetConformer()
+    atom_positions = [
+        (
+            conf.GetAtomPosition(idx).x,
+            conf.GetAtomPosition(idx).y,
+            conf.GetAtomPosition(idx).z,
+        )
+        for idx in ring
+    ]
+    center = (
+        sum(pos[0] for pos in atom_positions) / len(atom_positions),
+        sum(pos[1] for pos in atom_positions) / len(atom_positions),
+        sum(pos[2] for pos in atom_positions) / len(atom_positions),
+    )
+
+    u = unit(vec_sub(atom_positions[0], center))
+    normal = (0.0, 0.0, 0.0)
+    for pos in atom_positions[1:]:
+        candidate = cross(u, vec_sub(pos, center))
+        if norm(candidate) > 1e-8:
+            normal = unit(candidate)
+            break
+    if norm(normal) <= 1e-8:
+        normal = unit(center)
+    if norm(normal) <= 1e-8:
+        normal = (0.0, 0.0, 1.0)
+
+    v = unit(cross(normal, u))
+    if norm(v) <= 1e-8:
+        v = _perpendicular_unit(u, normal)
+
+    radius = (
+        sum(norm(vec_sub(pos, center)) for pos in atom_positions)
+        / len(atom_positions)
+        * 0.55
+    )
+    dash_count = 15
+    gap_fraction = 0.42
+    angle_step = 2.0 * math.pi / dash_count
+
+    for i in range(dash_count):
+        start_angle = i * angle_step
+        end_angle = start_angle + angle_step * (1.0 - gap_fraction)
+        dash_start = _cp_inner_ring_point(center, u, v, radius, start_angle)
+        dash_end = _cp_inner_ring_point(center, u, v, radius, end_angle)
+        view.addCylinder(
+            {
+                "start": {
+                    "x": dash_start[0],
+                    "y": dash_start[1],
+                    "z": dash_start[2],
+                },
+                "end": {
+                    "x": dash_end[0],
+                    "y": dash_end[1],
+                    "z": dash_end[2],
+                },
+                "radius": 0.025,
+                "color": "grey",
+                "fromCap": 1,
+                "toCap": 1,
+            }
+        )
+
+
+def _add_cp_delocalization_rings_to_view(view, mol: Chem.Mol) -> None:
+    if mol.GetNumConformers() == 0:
+        return
+
+    for ring in _cp_ring_atom_groups(mol):
+        _add_dashed_cp_delocalization_to_view(view, mol, ring)
+
+
 def _add_cp_center_lines_to_view(view, mol: Chem.Mol) -> None:
     if mol.GetNumConformers() == 0:
         return
@@ -2864,6 +2978,7 @@ def view_complex_3d(
 
     if "Cp" in parsed.ligands:
         _add_cp_center_lines_to_view(view, mol)
+        _add_cp_delocalization_rings_to_view(view, mol)
 
 
     view.setBackgroundColor("white")

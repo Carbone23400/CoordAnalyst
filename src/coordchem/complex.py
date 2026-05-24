@@ -139,18 +139,18 @@ class Complex:
         """
         Return an SVG depiction of the complex.
 
-        The 2D SVG is intentionally kept as a clean structure-only drawing:
-        complex names and geometry labels are not printed into the SVG. The
-        ``title`` parameter is accepted for backward compatibility with older
-        callers, but is no longer rendered.
+        Most 2D SVGs are kept as clean structure-only drawings. Cp-containing
+        complexes keep the name and geometry labels because their stylized
+        centroid-ring drawing is also used for report/export outputs.
         """
         from .viz.diagram_2d import diagram_2d_svg
 
+        display_labels = "Cp" in self.parsed.ligands
         return diagram_2d_svg(
             self.parsed,
             size=size,
             geometry_override=geometry_override,
-            display_labels=False,
+            display_labels=display_labels,
         )
 
     def save_2d(
@@ -163,18 +163,19 @@ class Complex:
         """
         Save a clean 2D SVG depiction to disk.
 
-        Names and geometry labels are not written into the SVG. The ``title``
-        parameter is accepted for backward compatibility, but is no longer
-        rendered.
+        Most saved SVGs omit names and geometry labels. Cp-containing
+        complexes keep those labels because their stylized centroid-ring
+        drawing is also used for report/export outputs.
         """
         from .viz.diagram_2d import save_diagram_2d
 
+        display_labels = "Cp" in self.parsed.ligands
         return save_diagram_2d(
             self.parsed,
             output_path=output_path,
             size=size,
             geometry_override=geometry_override,
-            display_labels=False,
+            display_labels=display_labels,
         )
 
     def build_3d(self, distance: float = 2.0, geometry: str | None = None):

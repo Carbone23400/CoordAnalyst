@@ -16,9 +16,11 @@ width='700px' height='700px' viewBox='0 0 700 700'>
 <path class='bond-1 atom-0 atom-2 cp-bond' d='M 350.0,374.5 L 350.0,497.0'/>
 <polygon class='bond-2 atom-1 atom-3 cp-ring' points='350.0,171.5 456.5,193.3 415.8,228.5 284.2,228.5 243.5,193.3'/>
 <ellipse class='cp-delocalized-ring' cx='350.0' cy='203.0' rx='61.6' ry='15.1'/>
-<polygon class='bond-3 atom-2 atom-4 cp-ring' points='350.0,528.5 243.5,506.7 284.2,471.5 415.8,471.5 456.5,506.7'/>
+<polygon class='bond-3 atom-2 atom-4 cp-ring' points='415.8,471.5 456.5,506.7 350.0,528.5 243.5,506.7 284.2,471.5'/>
 <ellipse class='cp-delocalized-ring' cx='350.0' cy='497.0' rx='61.6' ry='15.1'/>
 <text class='atom-0 cp-metal' x='350.0' y='350.0'>Fe</text>
 <circle class='atom-1' cx='350.0' cy='203.0' r='0.1' fill='none'/>
 <circle class='atom-2' cx='350.0' cy='497.0' r='0.1' fill='none'/>
+<text x='350.0' y='28' text-anchor='middle' font-family='Arial, Helvetica, sans-serif' font-size='18' font-weight='700' fill='#111111'>bis(cyclopentadienyl)iron(II)</text>
+<text class='coordchem-geometry-label' x='350.0' y='682' text-anchor='middle' font-family='Arial, Helvetica, sans-serif' font-size='18' font-weight='700' fill='#111111'>linear</text>
 </svg>
