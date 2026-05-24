@@ -94,6 +94,21 @@ class TestComplexProperties:
         assert c.coordination_number == 6
         assert c.geometry == "octahedral"
 
+    def test_draw_2d_svg_keeps_labels_for_cp_outputs(self):
+        c = Complex.from_formula("[Fe(Cp)2]")
+        svg = c.draw_2d_svg()
+
+        assert ">bis(cyclopentadienyl)iron(II)<" in svg
+        assert "class='coordchem-geometry-label'" in svg
+        assert ">linear<" in svg
+
+    def test_draw_2d_svg_keeps_non_cp_outputs_structure_only(self):
+        c = Complex.from_formula("[Fe(CN)6]4-")
+        svg = c.draw_2d_svg()
+
+        assert "class='coordchem-geometry-label'" not in svg
+        assert "hexacyanoferrate(II)" not in svg
+
 
 class TestComplexInputValidation:
     def test_from_input_rejects_empty_string(self):

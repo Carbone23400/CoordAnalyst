@@ -9,6 +9,7 @@ Run with:
 
 from __future__ import annotations
 
+import re
 from math import hypot
 from pathlib import Path
 
@@ -34,6 +35,13 @@ SQUARE_PLANAR_COMPLEX = "[PtCl4]2-"
 TETRAAMMINE_COMPLEX = "[Cu(NH3)4]2+"
 OCTAHEDRAL_COMPLEX = "[Fe(CN)6]4-"
 INVALID_COMPLEX = "not a complex"
+
+
+def _parse_svg_points(points: str) -> list[tuple[float, float]]:
+    return [
+        tuple(float(coordinate) for coordinate in point.split(","))
+        for point in points.split()
+    ]
 
 
 def _metal_bond_sites_by_label(mol):
@@ -157,23 +165,31 @@ def test_diagram_2d_svg_rejects_invalid_size():
 # File writing
 
 def test_save_diagram_2d_writes_svg_file():
-    out_file = Path("outputs/fe_cn6.svg")
-    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file = Path("test_outputs/save_diagram_2d.svg")
 
-    returned = save_diagram_2d(
-        OCTAHEDRAL_COMPLEX,
-        out_file,
-        title="Hexacyanoferrate(II)",
-    )
+    try:
+        returned = save_diagram_2d(
+            OCTAHEDRAL_COMPLEX,
+            out_file,
+            title="Hexacyanoferrate(II)",
+        )
 
-    assert returned == out_file
-    assert out_file.exists()
+        assert returned == out_file
+        assert out_file.exists()
 
-    content = out_file.read_text(encoding="utf-8")
-    assert "<svg" in content
-    assert "</svg>" in content
-    assert "bond-" in content
-    assert "atom-" in content
+        content = out_file.read_text(encoding="utf-8")
+        assert "<svg" in content
+        assert "</svg>" in content
+        assert "bond-" in content
+        assert "atom-" in content
+    finally:
+        if out_file.exists():
+            out_file.unlink()
+        if out_file.parent.exists():
+            try:
+                out_file.parent.rmdir()
+            except OSError:
+                pass
 
 
 # Extra representative complexes
@@ -224,8 +240,52 @@ def test_cp2_complex_uses_sandwich_centroid_representation():
     assert "atom-0 atom-2" in svg
     assert ">Fe<" in svg
     assert "font-weight:400" in svg
-    assert "dicyclopentadienyliron(II)" not in svg
-    assert ">sandwich<" not in svg
+    assert ">bis(cyclopentadienyl)iron(II)<" in svg
+    assert "class='coordchem-geometry-label'" in svg
+    assert ">linear<" in svg
+
+
+def test_cp2_complex_can_hide_name_and_geometry_labels():
+    svg = diagram_2d_svg("[Fe(Cp)2]", display_labels=False)
+
+    assert ">bis(cyclopentadienyl)iron(II)<" not in svg
+    assert "class='coordchem-geometry-label'" not in svg
+
+
+def test_cp2_complex_draws_staggered_cp_rings():
+    svg = diagram_2d_svg("[Fe(Cp)2]")
+    polygons = re.findall(r"<polygon[^>]+cp-ring[^>]+points='([^']+)'", svg)
+
+    assert len(polygons) == 2
+    assert polygons[0].startswith("350.0,171.5")
+    assert polygons[1].startswith("415.8,471.5")
+
+
+@pytest.mark.parametrize(
+    ("formula", "geometry", "opposite_pairs"),
+    [
+        ("[Ti(Cp)4]", "square planar", [(0, 3), (1, 2)]),
+        ("[Co(Cp)6]", "octahedral", [(0, 3), (1, 4), (2, 5)]),
+        ("[Ta(Cp)8]", "dodecahedral", [(0, 4), (1, 5), (2, 6), (3, 7)]),
+    ],
+)
+def test_cp_stylized_2d_keeps_opposite_rings_staggered(
+    formula,
+    geometry,
+    opposite_pairs,
+):
+    svg = diagram_2d_svg(formula, geometry_override=geometry, display_labels=False)
+    polygons = [
+        _parse_svg_points(points)
+        for points in re.findall(r"<polygon[^>]+cp-ring[^>]+points='([^']+)'", svg)
+    ]
+
+    for first_idx, second_idx in opposite_pairs:
+        first_point = polygons[first_idx][0]
+        second_point = polygons[second_idx][0]
+
+        assert first_point[0] + second_point[0] == pytest.approx(700.0, abs=0.2)
+        assert first_point[1] + second_point[1] == pytest.approx(700.0, abs=0.2)
 
 
 def test_cp_complexes_keep_centroid_representation_outside_cn2():

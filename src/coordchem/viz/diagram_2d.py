@@ -57,6 +57,8 @@ except ImportError as exc:  # pragma: no cover
 
 
 H2_ANNOTATION_PROP = "_coordchem_h2_annotation"
+CP_RING_ROTATION_DEGREES = -90.0
+CP_STAGGER_ROTATION_DEGREES = 36.0
 
 
 def _get_name_parser() -> Callable[[str], ParsedComplex] | None:
@@ -658,6 +660,18 @@ def _coordination_compound_name(parsed: ParsedComplex) -> str:
     return f"{''.join(ligand_parts)}{metal}({oxidation})"
 
 
+def _svg_title_for_complex(parsed: ParsedComplex, title: str | None) -> str:
+    """Return an explicit title, then the parsed name, then a generated fallback."""
+    if title:
+        return title
+
+    parsed_title = getattr(parsed, "iupac_name", None)
+    if parsed_title:
+        return parsed_title
+
+    return _coordination_compound_name(parsed)
+
+
 def _add_svg_labels(
     svg: str,
     size: int,
@@ -764,7 +778,7 @@ def _cp_ring_points(
     rx: float,
     ry: float,
     *,
-    rotation_degrees: float = -90.0,
+    rotation_degrees: float = CP_RING_ROTATION_DEGREES,
 ) -> list[tuple[float, float]]:
     """Return a perspective-flattened Cp pentagon."""
     rotation = rotation_degrees * pi / 180
@@ -788,6 +802,7 @@ def _oriented_cp_ring_points(
     radial_y: float,
     long_radius: float,
     short_radius: float,
+    rotation_degrees: float = CP_RING_ROTATION_DEGREES,
 ) -> list[tuple[float, float]]:
     """Return Cp pentagon points flattened perpendicular to the M-Cp axis."""
     length = (radial_x * radial_x + radial_y * radial_y) ** 0.5
@@ -797,7 +812,7 @@ def _oriented_cp_ring_points(
         radial_x, radial_y = radial_x / length, radial_y / length
 
     tangent_x, tangent_y = -radial_y, radial_x
-    rotation = -90.0 * pi / 180
+    rotation = rotation_degrees * pi / 180
     return [
         (
             cx
@@ -934,6 +949,7 @@ def _cp_ring_svg(
     ring_y: float,
     panel_size: float,
     style: str,
+    rotation_degrees: float = CP_RING_ROTATION_DEGREES,
 ) -> str:
     """Return one stylized Cp ring and its centroid bond."""
     radial_x = ring_x - center_x
@@ -949,6 +965,7 @@ def _cp_ring_svg(
         radial_y,
         ring_long,
         ring_short,
+        rotation_degrees,
     )
     rotation = _cp_ellipse_rotation(radial_x, radial_y)
     start = _line_start_near_metal(
@@ -1104,7 +1121,8 @@ def _cp_stylized_svg(
 
     title_markup = ""
     footer_markup = ""
-    if display_labels and title:
+    if display_labels:
+        title = _svg_title_for_complex(parsed, title)
         title_markup = (
             f"<text x='{size / 2:.1f}' y='28' text-anchor='middle' "
             "font-family='Arial, Helvetica, sans-serif' font-size='18' "
@@ -1156,6 +1174,7 @@ def _cp_sandwich_svg(
     size: int,
     title: str | None,
     geometry: str = "linear",
+    display_labels: bool = True,
 ) -> str:
     """Draw a metallocene-style Cp2M sandwich with centroid bonds."""
     center_x = size / 2
@@ -1168,8 +1187,30 @@ def _cp_sandwich_svg(
     inner_ry = ring_ry * 0.48
 
     top_points = _cp_ring_points(center_x, top_y, ring_rx, ring_ry)
-    bottom_points = _cp_ring_points(center_x, bottom_y, ring_rx, ring_ry, rotation_degrees=90)
+    bottom_points = _cp_ring_points(
+        center_x,
+        bottom_y,
+        ring_rx,
+        ring_ry,
+        rotation_degrees=CP_RING_ROTATION_DEGREES + CP_STAGGER_ROTATION_DEGREES,
+    )
     metal_label = escape(parsed.metal)
+    title_markup = ""
+    footer_markup = ""
+    if display_labels:
+        title_markup = (
+            f"<text x='{size / 2:.1f}' y='28' text-anchor='middle' "
+            "font-family='Arial, Helvetica, sans-serif' font-size='18' "
+            "font-weight='700' fill='#111111'>"
+            f"{escape(_svg_title_for_complex(parsed, title))}</text>"
+        )
+        footer_markup = (
+            "<text class='coordchem-geometry-label' "
+            f"x='{size / 2:.1f}' y='{size - 18}' text-anchor='middle' "
+            "font-family='Arial, Helvetica, sans-serif' font-size='18' "
+            "font-weight='700' fill='#111111'>"
+            f"{escape(geometry)}</text>"
+        )
 
     return f"""<?xml version='1.0' encoding='iso-8859-1'?>
 <svg version='1.1' baseProfile='full'
@@ -1194,6 +1235,8 @@ width='{size}px' height='{size}px' viewBox='0 0 {size} {size}'>
 <text class='atom-0 cp-metal' x='{center_x:.1f}' y='{metal_y:.1f}'>{metal_label}</text>
 <circle class='atom-1' cx='{center_x:.1f}' cy='{top_y:.1f}' r='0.1' fill='none'/>
 <circle class='atom-2' cx='{center_x:.1f}' cy='{bottom_y:.1f}' r='0.1' fill='none'/>
+{title_markup}
+{footer_markup}
 </svg>"""
 
 
@@ -1328,8 +1371,9 @@ def diagram_2d_svg(
         return _cp_sandwich_svg(
             parsed,
             size=size,
-            title=None,
+            title=title,
             geometry="linear",
+            display_labels=display_labels,
         )
     if _should_use_cp_stylized_svg(ligand_items):
         return _cp_stylized_svg(

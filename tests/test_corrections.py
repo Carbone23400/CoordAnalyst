@@ -30,9 +30,7 @@ from coordchem.spectra.predictor import (
 from data.ir_ra_bands import IRBandDB, BandRecord
 
 
-# ---------------------------------------------------------------------------
 # Helper — build a fake BandRecord and wrap it in a CorrectedBand
-# ---------------------------------------------------------------------------
 
 def make_band(ligand, assignment, coordination="terminal", wn=2150.0):
     """Create a minimal BandRecord and wrap it in a CorrectedBand."""
@@ -57,9 +55,7 @@ def make_band(ligand, assignment, coordination="terminal", wn=2150.0):
     )
 
 
-# ===========================================================================
 # 1. CorrectedBand dataclass
-# ===========================================================================
 
 class TestCorrectedBand:
 
@@ -94,9 +90,7 @@ class TestCorrectedBand:
         assert band.center == pytest.approx(2150.0)
 
 
-# ===========================================================================
 # 2. apply_backbonding_correction
-# ===========================================================================
 
 class TestBackbondingCorrection:
 
@@ -170,9 +164,7 @@ class TestBackbondingCorrection:
         assert result.active == True
 
 
-# ===========================================================================
 # 3. apply_coordination_shift
-# ===========================================================================
 
 class TestCoordinationShift:
 
@@ -219,9 +211,7 @@ class TestCoordinationShift:
         assert result.active == True
 
 
-# ===========================================================================
 # 4. apply_selection_rules
-# ===========================================================================
 
 class TestSelectionRules:
 
@@ -295,9 +285,7 @@ class TestSelectionRules:
         assert result.corrected_center == pytest.approx(450.0)
 
 
-# ===========================================================================
 # 5. Corrections pipeline — before vs after
-# ===========================================================================
 
 class TestCorrectionsOnOffComparison:
 
@@ -359,9 +347,7 @@ class TestCorrectionsOnOffComparison:
         assert result.bands_removed >= 0   # may be 0 if no ML stretches found
 
 
-# ===========================================================================
 # 6. Geometry integration
-# ===========================================================================
 
 class TestGeometryIntegration:
 
@@ -430,9 +416,7 @@ class TestGeometryIntegration:
         assert result.n_bands >= 0   # just check it didn't crash
 
 
-# ===========================================================================
 # 7. Backbonding — real complex benchmarks
-# ===========================================================================
 
 class TestBackbondingBenchmarks:
 

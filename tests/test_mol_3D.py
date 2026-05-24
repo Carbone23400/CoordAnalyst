@@ -18,6 +18,7 @@ from rdkit import Chem  # noqa: E402
 from coordchem.complex import Complex  # noqa: E402
 from coordchem.parser import KNOWN_LIGANDS, parse_formula  # noqa: E402
 from coordchem.viz.molecule3D import (  # noqa: E402
+    _cp_ring_atom_groups,
     _cp_ring_centers,
     bidentate_site_pair_indices,
     build_complex_3d,
@@ -820,6 +821,49 @@ class TestBuildComplex:
         assert all(length == pytest.approx(1.40, abs=0.03) for length in cc_lengths)
         assert all(length == pytest.approx(1.09, abs=0.03) for length in ch_lengths)
 
+    def test_cp_3d_uses_single_ring_bonds_with_dashed_delocalization(self):
+        mol = build_complex_3d(parse_formula("[Co(Cp)6]"))
+
+        cp_cc_bonds = [
+            bond
+            for bond in mol.GetBonds()
+            if {
+                mol.GetAtomWithIdx(bond.GetBeginAtomIdx()).GetSymbol(),
+                mol.GetAtomWithIdx(bond.GetEndAtomIdx()).GetSymbol(),
+            } == {"C"}
+        ]
+
+        assert len(cp_cc_bonds) == 30
+        assert all(bond.GetBondType() == Chem.BondType.SINGLE for bond in cp_cc_bonds)
+        assert not any(
+            atom.GetIsAromatic()
+            for atom in mol.GetAtoms()
+            if atom.GetSymbol() == "C"
+        )
+
+    @pytest.mark.parametrize(
+        ("formula", "geometry", "expected_pairs"),
+        [
+            ("[Fe(Cp)2]", None, 1),
+            ("[Ti(Cp)4]", "square planar", 2),
+            ("[Co(Cp)6]", "octahedral", 3),
+        ],
+    )
+    def test_cp_3d_places_opposite_rings_staggered(
+        self,
+        formula,
+        geometry,
+        expected_pairs,
+    ):
+        mol = build_complex_3d(parse_formula(formula), geometry=geometry)
+        phase_differences = _cp_antipodal_phase_differences(mol)
+
+        assert len(phase_differences) == expected_pairs
+        assert all(
+            phase_difference == pytest.approx(36.0, abs=0.5)
+            for phase_difference in phase_differences
+        )
+
     def test_cp_3d_uses_longer_metal_ring_center_distance(self):
         mol = build_complex_3d(parse_formula("[Co(Cp)6]"))
 
@@ -834,14 +878,14 @@ class TestBuildComplex:
             for distance in ring_center_distances
         )
 
-    def test_cp_3d_view_draws_dashed_lines_to_ring_centers(self):
+    def test_cp_3d_view_draws_centroid_lines_and_delocalization_rings(self):
         pytest.importorskip("py3Dmol")
 
         view = view_complex_3d("[Co(Cp)6]")
         html = view._make_html()
 
         assert "addCylinder" in html
-        assert html.count("addCylinder") == 42
+        assert html.count("addCylinder") == 132
 
     def test_hydride_complex_builds_h_donors(self):
         parsed = parse_formula("[FeH6]4-")
@@ -1530,6 +1574,50 @@ def _cross_tuple(a, b):
 def _unit_tuple(v):
     length = math.sqrt(sum(component * component for component in v))
     return tuple(component / length for component in v)
+
+
+def _cp_antipodal_phase_differences(mol):
+    conf = mol.GetConformer()
+    rings = _cp_ring_atom_groups(mol)
+    centers = _cp_ring_centers(mol)
+    phase_differences = []
+
+    for first_idx, first_center in enumerate(centers):
+        for second_idx, second_center in enumerate(centers[first_idx + 1:], first_idx + 1):
+            antipodal_alignment = _dot_tuple(first_center, second_center) / (
+                math.dist((0.0, 0.0, 0.0), first_center)
+                * math.dist((0.0, 0.0, 0.0), second_center)
+            )
+            if antipodal_alignment > -0.95:
+                continue
+
+            axis = _unit_tuple(_sub_tuple(first_center, second_center))
+            reference = (
+                (0.0, 1.0, 0.0)
+                if abs(axis[1]) < 0.9
+                else (0.0, 0.0, 1.0)
+            )
+            u = _unit_tuple(_cross_tuple(axis, reference))
+            v = _unit_tuple(_cross_tuple(axis, u))
+
+            phases = []
+            for ring, center in (
+                (rings[first_idx], first_center),
+                (rings[second_idx], second_center),
+            ):
+                atom_pos = conf.GetAtomPosition(ring[0])
+                radial = _sub_tuple((atom_pos.x, atom_pos.y, atom_pos.z), center)
+                phases.append(
+                    math.degrees(
+                        math.atan2(_dot_tuple(radial, v), _dot_tuple(radial, u))
+                    )
+                    % 72.0
+                )
+
+            phase_difference = abs((phases[1] - phases[0]) % 72.0)
+            phase_differences.append(min(phase_difference, 72.0 - phase_difference))
+
+    return phase_differences
 
 
 def pytest_approx(value, rel=1e-6, abs_=1e-6):
