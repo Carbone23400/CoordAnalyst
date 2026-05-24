@@ -134,7 +134,7 @@ The user is invited to first input a Formula or a Name of the coordination compl
 The interface then shows the complex identity with the name and the formula regarless of the input mode, and the metal, oxidation state, coordination number, d-electrons count and geometry. The details of the ligands are also provided.      
    
 <figure style="text-align: center;">
-  <img src="notebooks/app_display/main_edta.png" width="600">
+  <img src="notebooks/app_display/main_edta.png" width="800">
   <figcaption>
     <b>Figure 2.</b> display of the main complex informations for <code>[Fe(EDTA)]-</code>. 
   </figcaption>
@@ -143,7 +143,7 @@ The interface then shows the complex identity with the name and the formula rega
 The 2D diagram and 3D interactive visualisation is then displayed. 
      
 <figure style="text-align: center;">
-  <img src="notebooks/app_display/edta_diag.png" width="600">
+  <img src="notebooks/app_display/edta_diag.png" width="800">
   <figcaption>
     <b>Figure 3.</b> display of the 2D and 3D visualisations for <code>[Fe(EDTA)]-</code>. 
   </figcaption>
@@ -152,7 +152,7 @@ The 2D diagram and 3D interactive visualisation is then displayed.
 The predicted spectras are then showed with the corresponding band assignments to help with the understanding of the concepts. 
             
 <figure style="text-align: center;">
-  <img src="notebooks/app_display/spectra_edta.png" width="600">
+  <img src="notebooks/app_display/spectra_edta.png" width="800">
   <figcaption>
     <b>Figure 4.</b> display of the predicted spectra and band assignements for <code>[Fe(EDTA)]-</code>. 
   </figcaption>
