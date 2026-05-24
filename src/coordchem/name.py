@@ -19,12 +19,6 @@ def ligand_data(name: str) -> dict[str, int]:
     #full_name=name
     for ligand_symbol, data in sorted(KNOWN_LIGANDS.items(), key=lambda item: len(item[1][0]), reverse=True):
         ligand_name = _normalize_name(data[0])
-       # if ligand_name in name:
-        #    for prefixe, number in PREFIXE.items():
-         #       ligand[ligand_symbol]=number
-              #  break
-      #  else :
-          #  continue
         found=False
         for prefixe, number in sorted(PREFIXE.items(), key=lambda x: len(x[0]), reverse=True):
             pattern_1 = prefixe + ligand_name
