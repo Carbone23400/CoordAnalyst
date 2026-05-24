@@ -117,6 +117,18 @@ class TestCyanide:
         fe_bands = [b for b in bands if b.metal == "Fe"]
         assert any(abs(b.center - 2093) < 10 for b in fe_bands)
 
+    def test_fe2_specific_cn_excludes_fe3_band(self, db):
+        bands = db.get_bands("CN", spectrum_type="IR", metal="Fe", oxidation_state=2)
+        assignments = [b.assignment for b in bands if b.metal == "Fe"]
+        assert any("Fe²⁺" in assignment for assignment in assignments)
+        assert not any("Fe³⁺" in assignment for assignment in assignments)
+
+    def test_fe3_specific_cn_excludes_fe2_band(self, db):
+        bands = db.get_bands("CN", spectrum_type="IR", metal="Fe", oxidation_state=3)
+        assignments = [b.assignment for b in bands if b.metal == "Fe"]
+        assert any("Fe³⁺" in assignment for assignment in assignments)
+        assert not any("Fe²⁺" in assignment for assignment in assignments)
+
     def test_metal_specific_overrides_generic(self, db):
         """When metal='Fe', Fe-specific rows should appear before generic."""
         bands = db.get_bands("CN", spectrum_type="IR", metal="Fe")

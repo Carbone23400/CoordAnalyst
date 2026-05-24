@@ -268,6 +268,12 @@ class TestCounterIons:
 
         assert r.iupac_name == "ethylenediaminetetraacetatoferrate(III)"
 
+    def test_lowercase_edta_is_accepted_as_edta_alias(self):
+        r = parse("[Fe(edta)]-")
+
+        assert r.ligands == {"EDTA": 1}
+        assert r.ligand_names["EDTA"] == "ethylenediaminetetraacetato"
+
     def test_trailing_chloride_counter_ions(self):
         r = parse("[Fe(en)3]Cl3")
         assert r.counter_ions.get("Cl") == 3
@@ -470,9 +476,10 @@ class TestHydrideLigand:
         assert r.oxidation_state == 2
         assert r.coordination_number == 6
 
-    def test_parenthesized_h_minus_is_accepted_as_hydride_alias(self):
+    def test_parenthesized_h_minus_is_not_hydride_alias(self):
         r = parse("[Fe(H-)6]4-")
 
-        assert r.ligands == {"H": 6}
-        assert r.ligand_charges["H"] == -1
-        assert r.oxidation_state == 2
+        assert r.ligands == {"H-": 6}
+        assert r.ligand_charges["H-"] == 0
+        assert r.oxidation_state == -4
+        assert any("Ligand 'H-' not found" in warning for warning in r.warnings)

@@ -255,8 +255,8 @@ with st.sidebar:
     else:
         ir_display_mode = "Absorbance"
     st.caption("**Supported ligands** : CN, NC, CO, NO, Cl, Br, I, F, OH, O, S, NH3, " \
-    "H2O, NO2, ONO, SCN, NCS, N3, en, phen, bipy, ox, acac, " \
-    "EDTA, Cp, tpy, py, dmso/DMSO, PPh3, PMe3, PEt3, CH3, H.")
+    "H2O, NO2, ONO, SCN, NCS, N3, en, phen, bipy/bpy, ox, acac, " \
+    "EDTA/edta, Cp, tpy/terpy, py, dmso/DMSO, PPh3, PMe3, PEt3, CH3, H.")
 
 if not user_input.strip():
     st.info("Enter a formula or name in the sidebar and click **Analyze**.")

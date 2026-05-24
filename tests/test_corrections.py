@@ -126,6 +126,13 @@ class TestBackbondingCorrection:
         expected = BACKBONDING_SHIFTS.get(("CN", "Fe", 3), 0.0)
         assert result.correction_applied == pytest.approx(expected)
 
+    def test_oxidation_specific_band_not_shifted_again(self):
+        """A band already labelled Fe(III) should not receive a second shift."""
+        band   = make_band("CN", "C≡N stretch (Fe³⁺)", wn=2125.0)
+        result = apply_backbonding_correction(band, "Fe", 3)
+        assert result.corrected_center == pytest.approx(2125.0)
+        assert result.correction_applied == pytest.approx(0.0)
+
     def test_non_pi_accepting_ligand_not_shifted(self):
         """NH3 is not a π-accepting ligand — no backbonding correction."""
         band   = make_band("NH3", "N–H stretch", wn=3250.0)
@@ -294,10 +301,10 @@ class TestSelectionRules:
 
 class TestCorrectionsOnOffComparison:
 
-    def test_raw_vs_corrected_cn_fe3_differ(self):
+    def test_oxidation_specific_cn_fe3_not_double_corrected(self):
         """
-        Fe(III) hexacyanoferrate: corrections should shift CN stretch up.
-        Raw database center vs corrected center should be different.
+        Fe(III) hexacyanoferrate already has an Fe³⁺ database band,
+        so the CN stretch should not be shifted a second time.
         """
         parsed = parse_formula("[Fe(CN)6]3-")
 
@@ -312,7 +319,7 @@ class TestCorrectionsOnOffComparison:
                             if "C≡N stretch" in b.assignment]
 
         if raw_cn_wns and corrected_cn_wns:
-            assert max(corrected_cn_wns) != pytest.approx(max(raw_cn_wns))
+            assert max(corrected_cn_wns) == pytest.approx(max(raw_cn_wns))
 
     def test_corrections_off_gives_more_bands(self):
         """
@@ -329,12 +336,12 @@ class TestCorrectionsOnOffComparison:
 
         assert raw.n_bands >= corrected.n_bands
 
-    def test_corrections_applied_count_nonzero_for_known_metal(self):
-        """For Fe(III) with CN ligands, at least one correction should fire."""
+    def test_corrections_applied_zero_for_oxidation_specific_band(self):
+        """Fe(III) CN bands are already specific, so no backbonding shift fires."""
         parsed = parse_formula("[Fe(CN)6]3-")
         result = predict_spectrum(parsed, spectrum_type="IR",
                                   apply_corrections=True)
-        assert result.corrections_applied > 0
+        assert result.corrections_applied == 0
 
     def test_corrections_applied_zero_when_off(self):
         """When apply_corrections=False, no corrections should be recorded."""

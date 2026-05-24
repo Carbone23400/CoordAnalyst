@@ -39,7 +39,6 @@ KNOWN_LIGANDS: dict[str, tuple[str, int, int, str]] = {
     "ox"            : ("oxalato",                 -2,    2,      "O"),
     "acac"          : ("acetylacetonato",          -1,    2,      "O"),
     "EDTA"          : ("ethylenediaminetetraacetato", -4, 6,     "N/O"),
-    "edta"          : ("ethylenediaminetetraacetato", -4, 6,     "N/O"),
     "Cp"            : ("cyclopentadienyl",         -1,    1,      "C"),
     "tpy"           : ("terpyridine",               0,    3,      "N"),
     "terpy"         : ("terpyridine",               0,    3,      "N"),
@@ -54,7 +53,7 @@ KNOWN_LIGANDS: dict[str, tuple[str, int, int, str]] = {
 
 LIGAND_ALIASES: dict[str, str] = {
     "DMSO": "dmso",
-    "H-": "H",
+    "edta": "EDTA",
 }
 
 COUNTER_IONS: dict[str, int] = {
