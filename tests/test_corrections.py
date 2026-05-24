@@ -10,6 +10,9 @@ Tests cover:
     - apply_corrections=False vs True comparison
     - CorrectedBand dataclass
     - geometry integration
+
+Run with:
+    python -m pytest tests/test_corrections.py -v
 """
 import pytest 
 from coordchem.parser import parse_formula
