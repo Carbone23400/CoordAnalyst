@@ -16,7 +16,6 @@ from .parser import get_iupac_name
 def ligand_data(name: str) -> dict[str, int]:
     ligand = {}
     name = _normalize_name(name)
-    #full_name=name
     for ligand_symbol, data in sorted(KNOWN_LIGANDS.items(), key=lambda item: len(item[1][0]), reverse=True):
         ligand_name = _normalize_name(data[0])
         found=False
@@ -136,7 +135,6 @@ def metal_data(name: str) -> str:
             elif anion_name in name:
                 return symbols
         raise ValueError(f"Could not identify a metal name in '{name}'.")
-#le but est de transformer notre nom en formule car le programme sait faire avec la formule
 
 def build_formula(
      metal: str,
