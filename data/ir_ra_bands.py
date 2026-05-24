@@ -461,14 +461,6 @@ SEED_BANDS = [
     ("EDTA", "chelate", "any", "Raman",1280, 1350, "medium",      "C–N stretch",                 False, True,  "Nakamoto Vol.2 p.220"),
     ("EDTA", "chelate", "any", "Raman", 500,  600, "strong",      "M–O stretch (carboxylate)",   False, True,  "Nakamoto Vol.2 p.221"),
     ("EDTA", "chelate", "any", "Raman", 350,  450, "medium",      "M–N stretch",                 False, True,  "Nakamoto Vol.2 p.221"),
-    # edta lowercase alias
-    ("edta", "chelate", "any", "IR",   1580, 1650, "very strong", "COO⁻ asym. stretch",          True,  False, "Nakamoto Vol.2 p.218"),
-    ("edta", "chelate", "any", "IR",   1380, 1420, "strong",      "COO⁻ sym. stretch",           True,  False, "Nakamoto Vol.2 p.218"),
-    ("edta", "chelate", "any", "IR",    500,  600, "medium",      "M–O stretch (carboxylate)",   True,  False, "Nakamoto Vol.2 p.221"),
-    ("edta", "chelate", "any", "IR",    350,  450, "medium",      "M–N stretch",                 True,  False, "Nakamoto Vol.2 p.221"),
-    ("edta", "chelate", "any", "Raman",1380, 1420, "strong",      "COO⁻ sym. stretch",           False, True,  "Nakamoto Vol.2 p.218"),
-    ("edta", "chelate", "any", "Raman", 500,  600, "strong",      "M–O stretch (carboxylate)",   False, True,  "Nakamoto Vol.2 p.221"),
-
     # =========================================================================
     # CYCLOPENTADIENYL  Cp   (Nakamoto Vol.2 pp. 334–360)
     # =========================================================================
@@ -649,6 +641,9 @@ class IRBandDB:
         metal : str, optional
             Metal symbol e.g. "Fe". Returns metal-specific rows first,
             then generic "any" rows, deduplicating by assignment.
+        oxidation_state : int, optional
+            If metal-specific rows include an oxidation-state marker
+            such as Fe²⁺ or Fe³⁺, keep only the matching rows.
 
         Returns
         -------
@@ -673,6 +668,11 @@ class IRBandDB:
         # If a specific metal is given, prefer metal-specific rows
         if metal:
             specific   = [r for r in rows if r["metal"] == metal]
+            if oxidation_state is not None:
+                specific = [
+                    r for r in specific
+                    if self._matches_oxidation_state(r, metal, oxidation_state)
+                ]
             generic    = [r for r in rows if r["metal"] == "any"]
 
             # Keep only generic rows whose band family is not already covered by a metal-specific row. 
@@ -688,6 +688,19 @@ class IRBandDB:
             rows = specific + supplement
 
         return [self._row_to_record(r) for r in rows]
+
+    @staticmethod
+    def _matches_oxidation_state(
+        row: sqlite3.Row,
+        metal: str,
+        oxidation_state: int,
+    ) -> bool:
+        """Return False only for rows marked with another oxidation state."""
+        assignment = row["assignment"]
+        superscripts = str.maketrans("0123456789+-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻")
+        expected = f"{metal}{str(oxidation_state).translate(superscripts)}"
+        marked_state = re.search(rf"{re.escape(metal)}[⁰¹²³⁴⁵⁶⁷⁸⁹]+[⁺⁻]", assignment)
+        return marked_state is None or expected in assignment
 
     @staticmethod
     def _band_family_key(row: sqlite3.Row, metal: str) -> tuple[str, str]:

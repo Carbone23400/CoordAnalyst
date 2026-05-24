@@ -24,6 +24,7 @@ Three correction functions are applied in order after the database query:
 """
 import sys
 import os
+import re
 
 # Navigate up from src/coordchem/spectra/predictor.py to the repo root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -318,6 +319,7 @@ def predict_spectrum(
             ligand        = ligand_formula,
             spectrum_type = query_spectrum_type,
             metal         = parsed.metal,
+            oxidation_state = parsed.oxidation_state,
         )
 
         # exclude bridging bands so they dont show on the spectra
@@ -418,6 +420,13 @@ def apply_backbonding_correction(
     if band.ligand not in pi_accepting:
         return band
     if "stretch" not in band.assignment.lower():
+        return band
+
+    marked_state = re.search(
+        rf"{re.escape(metal)}[⁰¹²³⁴⁵⁶⁷⁸⁹]+[⁺⁻]",
+        band.assignment,
+    )
+    if marked_state:
         return band
 
     shift = BACKBONDING_SHIFTS.get((band.ligand, metal, oxidation_state), 0.0)
