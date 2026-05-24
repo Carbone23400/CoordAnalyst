@@ -74,7 +74,8 @@ def render_2d_view(
             display_labels=False,
         )
     except Exception as exc:
-        st.warning(f"Could not build a 2D drawing: {exc}")
+        message = str(exc).strip('"').strip("'")
+        st.warning(f"Could not build a 2D drawing: {message}")
         return
     render_centered_html(svg, height=size + 20)
 
@@ -86,6 +87,15 @@ def render_3d_view(
 ):
     """Render a 3D view of ``complex_obj`` inside the current Streamlit page."""
     from coordchem.viz.molecule3D import complex_3d_html
+    from coordchem.viz.ligand_data import LIGAND_SMILES
+
+    missing_ligands = [lig for lig in complex_obj.parsed.ligands if lig not in LIGAND_SMILES]
+    if missing_ligands:
+        ligand_list = "', '".join(missing_ligands)
+        verb = "it" if len(missing_ligands) == 1 else "them"
+        message = f"No ligand SMILES registered for '{ligand_list}'. Add {verb} to LIGAND_SMILES."
+        st.warning(f"Could not build a 3D view: {message}")
+        return
 
     try:
         html = complex_3d_html(
@@ -95,7 +105,8 @@ def render_3d_view(
             geometry=geometry_override,
         )
     except Exception as exc:
-        st.warning(f"Could not build a 3D view: {exc}")
+        message = str(exc).strip('"').strip("'")
+        st.warning(f"Could not build a 3D view: {message}")
         return
     render_centered_html(html, height=height + 20)
 
