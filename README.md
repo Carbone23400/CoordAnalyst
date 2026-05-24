@@ -119,16 +119,21 @@ Then reinstall RDKit via conda.
 
 
 
-## examples of main functionality 
-
-
-
-
-
-
-
-
-
+## Example of main functionalities   
+The interface of CoordAnalyst is quite user-friendly. Here is a guide to using it. A list of common complexes is provided in common_complexes.txt to provide with ideas to try the functionnalities for the whole range of ligands covered by the package. 
+    
+The user is invited to first input a Formula or a Name of the coordination complex of interest on the sidebar. They are also invited to chose what spectra(s) should be displayed and the type of IR display (absorbance or transmittance). The list of supported ligands is provided to facilitate the choice of the complex input.
+  
+![Figure 1 : display of the side bar](notebooks/app_display/side_bar.png)
+     
+The interface then shows the complex identity with the name and the formula regarless of the input mode, and the metal, oxidation state, coordination number, d-electrons count and geometry. The details of the ligands are also provided.      
+![Figure 2 : display of the main complex informations](notebooks/app_display/main_edta.png)
+    
+The 2D diagram and 3D interactive visualisation is then displayed. 
+![Figure 3 : display of the 2D and 3D visualisations for [Fe(EDTA)]-](notebooks/app_display/main_edta.png)
+    
+The predicted spectras are then showed with the corresponding band assignments to help with the understanding of the concepts. 
+![Figure 4 : display of the predicted spectra and band assignements for [Fe(EDTA)]-](notebooks/app_display/spectra_edta.png)
 
 .. _pyscaffold-notes:
 
