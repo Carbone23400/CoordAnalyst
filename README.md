@@ -124,7 +124,12 @@ The interface of CoordAnalyst is quite user-friendly. Here is a guide to using i
     
 The user is invited to first input a Formula or a Name of the coordination complex of interest on the sidebar. They are also invited to chose what spectra(s) should be displayed and the type of IR display (absorbance or transmittance). The list of supported ligands is provided to facilitate the choice of the complex input.
   
-![Figure 1 : display of the side bar](notebooks/app_display/side_bar.png)
+<figure style="text-align: center;">
+  <img src="notebooks/app_display/side_bar.png" width="280">
+  <figcaption>
+    <b>Figure 11.</b> Sidebar of the application, shown  with <code>[Fe(EDTA)]-</code> as input. 
+  </figcaption>
+</figure>
      
 The interface then shows the complex identity with the name and the formula regarless of the input mode, and the metal, oxidation state, coordination number, d-electrons count and geometry. The details of the ligands are also provided.      
 ![Figure 2 : display of the main complex informations](notebooks/app_display/main_edta.png)
